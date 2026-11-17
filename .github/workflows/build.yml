@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm install
       - run: npm run build
@@ -19,4 +19,5 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_build_placeholder
           NEXT_PUBLIC_YOUTUBE_FEED_URL: https://example.supabase.co/functions/v1/youtube-feed
+          NEXT_PUBLIC_YOUTUBE_SEARCH_URL: https://example.supabase.co/functions/v1/youtube-search
           NEXT_PUBLIC_YOUTUBE_SEARCH_URL: https://example.supabase.co/functions/v1/youtube-search

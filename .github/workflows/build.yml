@@ -20,4 +20,3 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_build_placeholder
           NEXT_PUBLIC_YOUTUBE_FEED_URL: https://example.supabase.co/functions/v1/youtube-feed
           NEXT_PUBLIC_YOUTUBE_SEARCH_URL: https://example.supabase.co/functions/v1/youtube-search
-          NEXT_PUBLIC_YOUTUBE_SEARCH_URL: https://example.supabase.co/functions/v1/youtube-search

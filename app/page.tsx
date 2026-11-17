@@ -47,8 +47,6 @@ export default function Home() {
       provider: 'google',
       options: {
         redirectTo: window.location.origin,
-        scopes: 'https://www.googleapis.com/auth/youtube.readonly',
-        queryParams: { access_type: 'offline', prompt: 'consent' },
       },
     });
     setLoading(false);
@@ -184,8 +182,8 @@ export default function Home() {
       <p className="eyebrow">המקום של המוזיקה שלך</p>
       <h1>המוזיקה שלי</h1>
       <p className="muted">כל השירים החדשים מהאמנים שאתה אוהב, במקום אחד.</p>
-      <button type="button" className="secondary" onClick={signInWithGoogle} disabled={loading}>התחברות באמצעות Google ו-YouTube</button>
-      <p className="fine">חיבור YouTube מבקש הרשאת קריאה בלבד למינויים. שינוי התראות או הרשמה לערוץ יתבצעו ב-YouTube.</p>
+      <button type="button" className="secondary" onClick={signInWithGoogle} disabled={loading}>התחברות באמצעות Google</button>
+      <p className="fine">הכניסה באמצעות Google משמשת לאימות המשתמש בלבד. חיבור לקריאת מינויים ב-YouTube יוגדר בנפרד, לאחר הפעלת ההרשאות.</p>
       <form onSubmit={signIn} className="stack">
         <label>כתובת אימייל<input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="name@example.com" /></label>
         <label>סיסמה<input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} placeholder="לפחות 6 תווים" /></label>

@@ -66,16 +66,15 @@ export default function Home() {
   }
 
   async function loadArtists() {
-    const { data, error } = await supabase.from('user_artists').select('id,channel_id,artist_name,channel_title,thumbnail_url').order('added_at', { ascending: false });
+    const { data, error } = await supabase.from('user_artists').select('id,channel_id,artist_name,channel_title,thumbnail_url').eq('user_id', session.user.id).order('added_at', { ascending: false });
     if (error) setNotice(error.message); else setArtists((data ?? []) as Artist[]);
   }
 
   async function loadFavorites() {
-    const { data, error } = await supabase.from('favorite_songs').select('youtube_video_id,title,artist_name,thumbnail_url,published_at,video_url');
-    if (!error) {
-      setFavorites((data ?? []).map((x: any) => x.youtube_video_id));
-      setFavoriteRows((data ?? []).map((x: any) => ({ ...x, official_confidence: 'low' })));
-    }
+    const { data, error } = await supabase.from('favorite_songs').select('youtube_video_id,title,artist_name,thumbnail_url,published_at,video_url').eq('user_id', session.user.id);
+    if (error) { setNotice(error.message); return; }
+    setFavorites((data ?? []).map((x: any) => x.youtube_video_id));
+    setFavoriteRows((data ?? []).map((x: any) => ({ ...x, official_confidence: 'low' })));
   }
 
   async function addArtist(e: React.FormEvent) {
@@ -130,27 +129,38 @@ export default function Home() {
   }
 
   async function removeArtist(id: string) {
-    const { error } = await supabase.from('user_artists').delete().eq('id', id);
+    const { error } = await supabase.from('user_artists').delete().eq('id', id).eq('user_id', session.user.id);
     if (error) setNotice(error.message); else await loadArtists();
   }
 
   async function loadFeed() {
     setLoading(true); setFeedError(''); setNotice('');
-    const { data: { session: current } } = await supabase.auth.getSession();
-    const endpoint = process.env.NEXT_PUBLIC_YOUTUBE_FEED_URL;
-    if (!endpoint || !current) { setLoading(false); setFeedError('חסר חיבור תקין לשירות.'); return; }
-    const response = await fetch(endpoint, { headers: { Authorization: `Bearer ${current.access_token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY! } });
-    const body = await response.json();
-    setLoading(false);
-    if (!response.ok) { setFeedError(body.message || 'לא ניתן לטעון שירים כרגע.'); setSongs([]); return; }
-    setSongs(body.items ?? []);
-    if (body.errors?.length) setFeedError('חלק מהערוצים לא נטענו. אפשר לנסות שוב מאוחר יותר.');
+    try {
+      const { data: { session: current } } = await supabase.auth.getSession();
+      const endpoint = process.env.NEXT_PUBLIC_YOUTUBE_FEED_URL;
+      if (!endpoint || !current) throw new Error('חסר חיבור תקין לשירות.');
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${current.access_token}`,
+          apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+        },
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || 'לא ניתן לטעון שירים כרגע.');
+      setSongs(body.items ?? []);
+      if (body.errors?.length) setFeedError('חלק מהערוצים לא נטענו. אפשר לנסות שוב מאוחר יותר.');
+    } catch (error) {
+      setSongs([]);
+      setFeedError(error instanceof Error ? error.message : 'לא ניתן לטעון שירים כרגע.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function toggleFavorite(song: Song) {
     const isSaved = favorites.includes(song.youtube_video_id);
     if (isSaved) {
-      const { error } = await supabase.from('favorite_songs').delete().eq('youtube_video_id', song.youtube_video_id);
+      const { error } = await supabase.from('favorite_songs').delete().eq('user_id', session.user.id).eq('youtube_video_id', song.youtube_video_id);
       if (error) setNotice(error.message); else { setFavorites(favorites.filter(id => id !== song.youtube_video_id)); setFavoriteRows(favoriteRows.filter(item => item.youtube_video_id !== song.youtube_video_id)); }
     } else {
       const { error } = await supabase.from('favorite_songs').insert({
@@ -229,7 +239,7 @@ export default function Home() {
 
       {tab === 'favorites' && <><div className="section-intro"><h2>המועדפים שלך</h2><p>שירים ששמרת מהפיד.</p></div><div className="song-grid">{favoriteSongs.map(song => <article className="song-card" key={song.youtube_video_id}><a href={song.video_url} target="_blank" rel="noreferrer" className="thumb">{song.thumbnail_url && <img src={song.thumbnail_url} alt="" />}<span className="play">▶</span></a><div className="song-info"><div><h3>{song.title}</h3><p>{song.artist_name}</p></div><button className="heart saved" onClick={() => toggleFavorite(song)}>♥</button></div></article>)}</div>{!favorites.length && <div className="empty-state"><strong>עוד אין לך מועדפים</strong><p>שמור שירים מהמסך „שירים חדשים”.</p></div>}</>}
 
-      {tab === 'connect' && <div className="settings-grid"><article className="settings-card"><span className="settings-icon">▶</span><h2>YouTube Data API</h2><p>חיבור רשמי להצגת שירים חדשים לפי ערוצי האמנים.</p><span className="pill warning">ממתין למפתח API</span><ol><li>צור פרויקט ב-Google Cloud.</li><li>הפעל YouTube Data API v3.</li><li>צור API Key והוסף אותו ב-Supabase → Edge Functions → Secrets בשם <code>YOUTUBE_API_KEY</code>.</li></ol></article><article className="settings-card"><span className="settings-icon">G</span><h2>Google OAuth</h2><p>חיבור חשבון Google לצפייה במינויים ולפעולות הרשמה מורשות.</p><span className="pill warning">טרם הוגדר</span><p className="fine">יש להגדיר OAuth Client ב-Google Cloud ולהוסיף את Client ID וה-Secret כסודות שרת. אין להזין סודות בדפדפן.</p></article></div>}
+      {tab === 'connect' && <div className="settings-grid"><article className="settings-card"><span className="settings-icon">▶</span><h2>YouTube Data API</h2><p>חיבור רשמי להצגת שירים חדשים לפי ערוצי האמנים.</p><span className="pill warning">ממתין למפתח API</span><ol><li>צור פרויקט ב-Google Cloud.</li><li>הפעל YouTube Data API v3.</li><li>צור API Key והוסף אותו ב-Supabase → Edge Functions → Secrets בשם <code>YOUTUBE_API_KEY</code>.</li></ol></article><article className="settings-card"><span className="settings-icon">G</span><h2>Google OAuth</h2><p>חיבור Google לצורך כניסה לחשבון. קריאת מינויים והרשמה לערוצים עדיין אינן ממומשות באתר.</p><span className="pill warning">טרם הוגדר</span><p className="fine">יש להגדיר OAuth Client ב-Google Cloud ולהפעיל את Google Provider ב-Supabase Authentication. פרטי הלקוח מוגדרים שם — לא בקוד האתר. הרשאת YouTube אינה פעילה עד להשלמת הבדיקה מקצה לקצה.</p></article></div>}
       <footer>המוזיקה שלי · התוצאות מגיעות מ-YouTube הרשמי · הממשק בעברית</footer>
     </section>
   </main>;

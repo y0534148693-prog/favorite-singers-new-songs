@@ -4,7 +4,7 @@
 
 ## דרישות
 
-- Node.js 20 ומעלה
+- Node.js 22 ומעלה
 - פרויקט Supabase עם הסכמה והפונקציה המתוארים בהמשך
 - מפתח YouTube Data API v3 בצד שרת
 
@@ -37,6 +37,7 @@
 | `NEXT_PUBLIC_SUPABASE_URL` | כתובת פרויקט Supabase |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | מפתח Publishable ציבורי של Supabase |
 | `NEXT_PUBLIC_YOUTUBE_FEED_URL` | כתובת Edge Function בשם `youtube-feed` |
+| `NEXT_PUBLIC_YOUTUBE_SEARCH_URL` | כתובת Edge Function בשם `youtube-search` |
 
 אין להוסיף ל-GitHub את `.env.local`, מפתחות Service Role, מפתחות Google פרטיים או refresh tokens. קובץ `.env.local.example` הוא תבנית בלבד.
 
@@ -64,7 +65,7 @@
 - קיים: ממשק RTL רספונסיבי, התחברות והרשמה עם Supabase Auth, הוספה והסרה של ערוצים לפי Channel ID, פיד דרך Edge Function, חיפוש, סינון ומועדפים.
 - קיים: חיפוש ערוצי YouTube דרך פונקציית שרת מאומתת; הוספה לרשימת האמנים מתוצאות החיפוש.
 - נדרש להשלמה: אימות ערוץ רשמי מעבר לתוצאות החיפוש, המלצות אמנים, בדיקות אוטומטיות וטיפול משופר במכסות.
-- Google OAuth עדיין אינו מחובר. אין להכניס Client Secret או refresh tokens לקוד הדפדפן.
+- כפתור Google OAuth כבר קיים בקוד, אך יש להגדיר את Google Provider ב-Supabase ולהוסיף את פרטי OAuth ב-Google Cloud לפני השימוש. חיבור הרשאות YouTube לקריאת מינויים עדיין לא נבדק מקצה לקצה. אין להכניס Client Secret או refresh tokens לקוד הדפדפן.
 - התראות YouTube אוטומטיות אינן ממומשות; התראות ערוץ מנוהלות ב-YouTube.
 - הפרויקט עדיין לא נפרס לאתר ציבורי. אין שימוש ב-Vercel כחלק מהתהליך.
 

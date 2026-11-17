@@ -18,6 +18,8 @@ export default function Home() {
   const [favoriteRows, setFavoriteRows] = useState<Song[]>([]);
   const [artistName, setArtistName] = useState('');
   const [channelId, setChannelId] = useState('');
+  const [channelQuery, setChannelQuery] = useState('');
+  const [channelResults, setChannelResults] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}>>([]);
   const [search, setSearch] = useState('');
   const [filterArtist, setFilterArtist] = useState('all');
   const [loading, setLoading] = useState(false);
@@ -87,6 +89,44 @@ export default function Home() {
     setLoading(false);
     if (error) setNotice(error.code === '23505' ? 'האמן כבר נמצא ברשימה.' : error.message);
     else { setArtistName(''); setChannelId(''); setNotice('האמן נוסף בהצלחה.'); await loadArtists(); }
+  }
+
+  async function searchYouTubeChannels(e: React.FormEvent) {
+    e.preventDefault();
+    if (!channelQuery.trim()) return;
+    setLoading(true); setNotice('');
+    try {
+      const { data: { session: current } } = await supabase.auth.getSession();
+      const endpoint = process.env.NEXT_PUBLIC_YOUTUBE_SEARCH_URL;
+      if (!endpoint || !current) throw new Error('חסר חיבור לחיפוש YouTube. בדוק את הגדרות האתר.');
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${current.access_token}` },
+        body: JSON.stringify({ query: channelQuery.trim() }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || 'החיפוש נכשל');
+      setChannelResults(body.items ?? []);
+      if (!(body.items ?? []).length) setNotice('לא נמצאו ערוצים מתאימים. נסה ניסוח אחר.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'שגיאה בחיפוש');
+    } finally { setLoading(false); }
+  }
+
+  async function addFoundChannel(channel: {channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}) {
+    setLoading(true);
+    const { error } = await supabase.from('user_artists').insert({
+      user_id: session.user.id, artist_name: channel.title, channel_id: channel.channel_id,
+      channel_title: channel.title, thumbnail_url: channel.thumbnail_url,
+      channel_url: channel.channel_url,
+    });
+    setLoading(false);
+    if (error) setNotice(error.code === '23505' ? 'הערוץ כבר נמצא ברשימה.' : error.message);
+    else {
+      setNotice(channel.title + ' נוסף לרשימת הזמרים.');
+      setChannelResults(old => old.filter(item => item.channel_id !== channel.channel_id));
+      await loadArtists();
+    }
   }
 
   async function removeArtist(id: string) {
@@ -181,6 +221,8 @@ export default function Home() {
 
       {tab === 'artists' && <>
         <div className="section-intro"><h2>האמנים שמהם נביא עדכונים</h2><p>הוסף ערוץ YouTube לפי Channel ID כדי לקבל את השירים החדשים שלו.</p></div>
+        <form className="add-form" onSubmit={searchYouTubeChannels}><label>חיפוש ערוץ YouTube<input value={channelQuery} onChange={e => setChannelQuery(e.target.value)} required placeholder="חפש שם אמן או ערוץ…" /></label><button className="primary" disabled={loading}>חפש ערוצים</button></form>
+        {channelResults.length > 0 && <div className="artist-list">{channelResults.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">בדוק ערוץ ↗</a><button className="primary" disabled={loading || artists.some(a => a.channel_id === channel.channel_id)} onClick={() => addFoundChannel(channel)}>{artists.some(a => a.channel_id === channel.channel_id) ? 'כבר נוסף' : 'הוסף לרשימה'}</button></div>)}</div>}
         <form className="add-form" onSubmit={addArtist}><label>שם האמן<input value={artistName} onChange={e => setArtistName(e.target.value)} required placeholder="לדוגמה: אמן אהוב" /></label><label>מזהה ערוץ YouTube<input value={channelId} onChange={e => setChannelId(e.target.value)} required placeholder="UCxxxxxxxxxxxxxxxx" /></label><button className="primary" disabled={loading}>＋ הוסף לרשימה</button></form>
         <div className="artist-list">{artists.map(a => <div className="artist-row" key={a.id}><div className="artist-avatar">{a.thumbnail_url ? <img src={a.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{a.artist_name}</strong><small>{a.channel_id}</small></div><a href={a.channel_url ?? `https://www.youtube.com/channel/${a.channel_id}`} target="_blank" rel="noreferrer">פתיחת הערוץ ↗</a><button className="remove" onClick={() => removeArtist(a.id)}>הסר</button></div>)}{!artists.length && <div className="empty-state"><strong>הרשימה עדיין ריקה</strong><p>הוסף את ערוצי האמנים שאתה אוהב.</p></div>}</div>
       </>}

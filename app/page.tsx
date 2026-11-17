@@ -101,7 +101,7 @@ export default function Home() {
       if (!endpoint || !current) throw new Error('חסר חיבור לחיפוש YouTube. בדוק את הגדרות האתר.');
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${current.access_token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${current.access_token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY! },
         body: JSON.stringify({ query: channelQuery.trim() }),
       });
       const body = await response.json();
@@ -139,7 +139,7 @@ export default function Home() {
     const { data: { session: current } } = await supabase.auth.getSession();
     const endpoint = process.env.NEXT_PUBLIC_YOUTUBE_FEED_URL;
     if (!endpoint || !current) { setLoading(false); setFeedError('חסר חיבור תקין לשירות.'); return; }
-    const response = await fetch(endpoint, { headers: { Authorization: `Bearer ${current.access_token}` } });
+    const response = await fetch(endpoint, { headers: { Authorization: `Bearer ${current.access_token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY! } });
     const body = await response.json();
     setLoading(false);
     if (!response.ok) { setFeedError(body.message || 'לא ניתן לטעון שירים כרגע.'); setSongs([]); return; }

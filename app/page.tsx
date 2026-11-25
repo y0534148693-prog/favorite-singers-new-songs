@@ -11,6 +11,7 @@ export default function Home() {
   const [session, setSession] = useState<any>(null);
   const [authReady, setAuthReady] = useState(false);
   const [preferencesUserId, setPreferencesUserId] = useState<string | null>(null);
+  const [artistsUserId, setArtistsUserId] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
@@ -55,18 +56,20 @@ export default function Home() {
       void loadArtists();
       void loadFavorites();
       setPreferencesUserId(null);
+      setArtistsUserId(null);
       void loadPreferences();
     } else {
       setArtists([]); setSongs([]); setFavorites([]); setFavoriteRows([]);
       setRecommendations([]); setDismissedIds([]); setYoutubeSubscriptions([]);
       setSelectedGenres([]); setSelectedLanguages(['he']);
       setPreferencesUserId(null);
+      setArtistsUserId(null);
     }
   }, [session?.user?.id]);
 
   useEffect(() => {
-    if (tab === 'recommendations' && session?.user && preferencesUserId === session.user.id) void loadRecommendations();
-  }, [tab, session?.user?.id, artists, preferencesUserId]);
+    if (tab === 'recommendations' && session?.user && preferencesUserId === session.user.id && artistsUserId === session.user.id) void loadRecommendations();
+  }, [tab, session?.user?.id, artists, preferencesUserId, artistsUserId]);
 
   async function signInWithGoogle() {
     setLoading(true); setNotice('');
@@ -150,8 +153,12 @@ export default function Home() {
   }
 
   async function loadArtists() {
-    const { data, error } = await supabase.from('user_artists').select('id,channel_id,artist_name,channel_title,thumbnail_url').eq('user_id', session.user.id).order('added_at', { ascending: false });
-    if (error) setNotice(error.message); else setArtists((data ?? []) as Artist[]);
+    const userId = session.user.id;
+    setArtistsUserId(null);
+    const { data, error } = await supabase.from('user_artists').select('id,channel_id,artist_name,channel_title,thumbnail_url').eq('user_id', userId).order('added_at', { ascending: false });
+    if (error) setNotice(error.message);
+    else setArtists((data ?? []) as Artist[]);
+    setArtistsUserId(userId);
   }
 
   async function loadFavorites() {

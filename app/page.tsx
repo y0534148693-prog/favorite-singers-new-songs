@@ -156,17 +156,25 @@ export default function Home() {
     else if (authMode === 'signup') setNotice('נשלח אליך מייל לאימות החשבון, אם אימות המייל מופעל בפרויקט.');
   }
 
+  async function isCurrentUser(userId: string) {
+    const { data: { session: current } } = await supabase.auth.getSession();
+    return current?.user.id === userId;
+  }
+
   async function loadArtists() {
     const userId = session.user.id;
     setArtistsUserId(null);
     const { data, error } = await supabase.from('user_artists').select('id,channel_id,artist_name,channel_title,thumbnail_url').eq('user_id', userId).order('added_at', { ascending: false });
+    if (!(await isCurrentUser(userId))) return;
     if (error) setNotice(error.message);
     else setArtists((data ?? []) as Artist[]);
     setArtistsUserId(userId);
   }
 
   async function loadFavorites() {
-    const { data, error } = await supabase.from('favorite_songs').select('youtube_video_id,title,artist_name,thumbnail_url,published_at,video_url').eq('user_id', session.user.id);
+    const userId = session.user.id;
+    const { data, error } = await supabase.from('favorite_songs').select('youtube_video_id,title,artist_name,thumbnail_url,published_at,video_url').eq('user_id', userId);
+    if (!(await isCurrentUser(userId))) return;
     if (error) { setNotice(error.message); return; }
     setFavorites((data ?? []).map((x: any) => x.youtube_video_id));
     setFavoriteRows((data ?? []).map((x: any) => ({ ...x, official_confidence: 'low' })));
@@ -205,6 +213,7 @@ export default function Home() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.message || 'החיפוש נכשל');
+      if (!(await isCurrentUser(current.user.id))) return;
       setChannelResults(body.items ?? []);
       if (!(body.items ?? []).length) setNotice('לא נמצאו ערוצים מתאימים. נסה ניסוח אחר.');
     } catch (error) {
@@ -231,12 +240,14 @@ export default function Home() {
   }
 
   async function loadPreferences() {
+    const userId = session.user.id;
     setPreferencesUserId(null);
     try {
       const { data, error } = await supabase.from('music_preferences')
         .select('genres,language_preferences')
-        .eq('user_id', session.user.id)
+        .eq('user_id', userId)
         .maybeSingle();
+      if (!(await isCurrentUser(userId))) return;
       if (error) throw error;
       setSelectedGenres(data?.genres ?? []);
       setSelectedLanguages(data?.language_preferences?.length ? data.language_preferences : ['he']);
@@ -245,7 +256,7 @@ export default function Home() {
       setSelectedGenres([]);
       setSelectedLanguages(['he']);
     } finally {
-      setPreferencesUserId(session.user.id);
+      if (await isCurrentUser(userId)) setPreferencesUserId(userId);
     }
   }
 
@@ -286,10 +297,12 @@ export default function Home() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.message || 'לא ניתן לטעון הצעות כרגע.');
+      if (!(await isCurrentUser(current.user.id))) return;
       const { data: dismissedRows, error: dismissedError } = await supabase
         .from('dismissed_artists')
         .select('channel_id')
         .eq('user_id', current.user.id);
+      if (!(await isCurrentUser(current.user.id))) return;
       if (dismissedError) throw dismissedError;
       const savedDismissed = (dismissedRows ?? []).map((row: { channel_id: string }) => row.channel_id);
       setDismissedIds(savedDismissed);
@@ -338,6 +351,7 @@ export default function Home() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.message || 'לא ניתן לטעון שירים כרגע.');
+      if (!(await isCurrentUser(current.user.id))) return;
       setSongs(sortSongsNewestFirst(body.items ?? []));
       if (body.errors?.length) setFeedError('חלק מהערוצים לא נטענו. אפשר לנסות שוב מאוחר יותר.');
     } catch (error) {

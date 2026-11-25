@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
       try {
         let pageToken: string | undefined;
         let shouldContinue = true;
-        for (let page = 0; page < 2 && shouldContinue; page++) {
+        for (let page = 0; page < 4 && shouldContinue; page++) {
           const params: Record<string, string> = {
             part: "snippet,contentDetails",
             playlistId: uploadsPlaylist,
@@ -103,7 +103,7 @@ Deno.serve(async (req: Request) => {
           for (const item of items) {
             const snippet = item.snippet;
             const videoId = item.contentDetails?.videoId ?? snippet?.resourceId?.videoId;
-            const publishedAt = snippet?.publishedAt ?? item.contentDetails?.videoPublishedAt;
+            const publishedAt = item.contentDetails?.videoPublishedAt ?? snippet?.publishedAt;
             if (!videoId || !snippet || !publishedAt) continue;
             const publishedTime = Date.parse(publishedAt);
             if (!Number.isFinite(publishedTime)) continue;

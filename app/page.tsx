@@ -11,7 +11,7 @@ export default function Home() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [tab, setTab] = useState<'songs' | 'artists' | 'favorites' | 'connect'>('songs');
+  const [tab, setTab] = useState<'songs' | 'artists' | 'favorites' | 'recommendations' | 'connect'>('songs');
   const [artists, setArtists] = useState<Artist[]>([]);
   const [songs, setSongs] = useState<Song[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -20,6 +20,8 @@ export default function Home() {
   const [channelId, setChannelId] = useState('');
   const [channelQuery, setChannelQuery] = useState('');
   const [channelResults, setChannelResults] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}>>([]);
+  const [recommendations, setRecommendations] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}>>([]);
+  const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [filterArtist, setFilterArtist] = useState('all');
   const [loading, setLoading] = useState(false);
@@ -38,8 +40,13 @@ export default function Home() {
       void loadFavorites();
     } else {
       setArtists([]); setSongs([]); setFavorites([]); setFavoriteRows([]);
+      setRecommendations([]);
     }
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (tab === 'recommendations' && session?.user) void loadRecommendations();
+  }, [tab, session?.user?.id, artists]);
 
   async function signInWithGoogle() {
     setLoading(true); setNotice('');
@@ -126,6 +133,44 @@ export default function Home() {
     }
   }
 
+  async function loadRecommendations() {
+    if (!artists.length) { setRecommendations([]); return; }
+    const endpoint = process.env.NEXT_PUBLIC_YOUTUBE_SEARCH_URL;
+    if (!endpoint) { setNotice('חסר חיבור לשירות חיפוש YouTube.'); return; }
+    setLoading(true);
+    try {
+      const { data: { session: current } } = await supabase.auth.getSession();
+      if (!current) return;
+      const seed = artists.slice(0, 3).map(a => a.artist_name).join(' ');
+      const query = (seed + ' זמר ישראלי').slice(0, 100);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${current.access_token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY! },
+        body: JSON.stringify({ query }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || 'לא ניתן לטעון הצעות כרגע.');
+      const savedDismissed = JSON.parse(localStorage.getItem('my-music-dismissed-channels') || '[]') as string[];
+      setDismissedIds(savedDismissed);
+      const existing = new Set(artists.map(a => a.channel_id));
+      setRecommendations((body.items ?? []).filter((item: {channel_id:string}) => !existing.has(item.channel_id) && !savedDismissed.includes(item.channel_id)));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'שגיאה בטעינת הצעות.');
+    } finally { setLoading(false); }
+  }
+
+  function dismissRecommendation(channelId: string) {
+    const next = [...new Set([...dismissedIds, channelId])];
+    setDismissedIds(next);
+    localStorage.setItem('my-music-dismissed-channels', JSON.stringify(next));
+    setRecommendations(items => items.filter(item => item.channel_id !== channelId));
+  }
+
+  async function addRecommendedChannel(channel: {channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}) {
+    await addFoundChannel(channel);
+    setRecommendations(items => items.filter(item => item.channel_id !== channel.channel_id));
+  }
+
   async function removeArtist(id: string) {
     const { error } = await supabase.from('user_artists').delete().eq('id', id).eq('user_id', session.user.id);
     if (error) setNotice(error.message); else await loadArtists();
@@ -203,13 +248,14 @@ export default function Home() {
         <button className={tab === 'songs' ? 'active' : ''} onClick={() => setTab('songs')}>◉　שירים חדשים</button>
         <button className={tab === 'artists' ? 'active' : ''} onClick={() => setTab('artists')}>♬　הזמרים שלי</button>
         <button className={tab === 'favorites' ? 'active' : ''} onClick={() => setTab('favorites')}>♡　מועדפים</button>
+        <button className={tab === 'recommendations' ? 'active' : ''} onClick={() => setTab('recommendations')}>✦　אולי תאהב</button>
         <button className={tab === 'connect' ? 'active' : ''} onClick={() => setTab('connect')}>⌁　חיבורים והגדרות</button>
       </nav>
       <div className="sidebar-bottom"><span className="status-dot" /> החשבון מחובר<button className="logout" onClick={() => supabase.auth.signOut()}>התנתקות</button></div>
     </aside>
 
     <section className="content">
-      <header className="topbar"><div><p className="eyebrow">שלום, וברוך הבא</p><h1>{tab === 'songs' ? 'השירים החדשים שלך' : tab === 'artists' ? 'הזמרים שלי' : tab === 'favorites' ? 'השירים שאהבת' : 'חיבורים והגדרות'}</h1></div><div className="avatar">{(session.user.email?.[0] ?? 'מ').toUpperCase()}</div></header>
+      <header className="topbar"><div><p className="eyebrow">שלום, וברוך הבא</p><h1>{tab === 'songs' ? 'השירים החדשים שלך' : tab === 'artists' ? 'הזמרים שלי' : tab === 'favorites' ? 'השירים שאהבת' : tab === 'recommendations' ? 'אולי תאהב' : 'חיבורים והגדרות'}</h1></div><div className="avatar">{(session.user.email?.[0] ?? 'מ').toUpperCase()}</div></header>
       {notice && <div className="notice inline-notice">{notice}<button onClick={() => setNotice('')}>×</button></div>}
 
       {tab === 'songs' && <>
@@ -236,6 +282,14 @@ export default function Home() {
       </>}
 
       {tab === 'favorites' && <><div className="section-intro"><h2>המועדפים שלך</h2><p>שירים ששמרת מהפיד.</p></div><div className="song-grid">{favoriteSongs.map(song => <article className="song-card" key={song.youtube_video_id}><a href={song.video_url} target="_blank" rel="noreferrer" className="thumb">{song.thumbnail_url && <img src={song.thumbnail_url} alt="" />}<span className="play">▶</span></a><div className="song-info"><div><h3>{song.title}</h3><p>{song.artist_name}</p></div><button className="heart saved" onClick={() => toggleFavorite(song)}>♥</button></div></article>)}</div>{!favorites.length && <div className="empty-state"><strong>עוד אין לך מועדפים</strong><p>שמור שירים מהמסך „שירים חדשים”.</p></div>}</>}
+
+      {tab === 'recommendations' && <>
+        <div className="section-intro"><h2>ערוצים שאולי יתאימו לטעם שלך</h2><p>ההצעות מבוססות על חיפוש YouTube לפי שמות האמנים שכבר הוספת. זו התאמת חיפוש ראשונית, לא דירוג פופולריות או אימות רשמי.</p></div>
+        <div className="toolbar"><button className="secondary" onClick={loadRecommendations} disabled={loading}>{loading ? 'מחפש…' : '↻ רענן הצעות'}</button></div>
+        {!artists.length && <div className="empty-state"><strong>צריך להתחיל מאמן אחד</strong><p>הוסף אמן כדי שנוכל לחפש ערוצים דומים.</p><button className="secondary" onClick={() => setTab('artists')}>הוספת אמן</button></div>}
+        {artists.length > 0 && !recommendations.length && <div className="empty-state"><strong>אין כרגע הצעות חדשות</strong><p>אפשר לרענן את החיפוש בהמשך.</p></div>}
+        <div className="artist-list">{recommendations.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">בדוק ערוץ ↗</a><button className="primary" disabled={loading} onClick={() => addRecommendedChannel(channel)}>הוסף</button><button className="remove" onClick={() => dismissRecommendation(channel.channel_id)}>לא מעוניין</button></div>)}</div>
+      </>}
 
       {tab === 'connect' && <div className="settings-grid"><article className="settings-card"><span className="settings-icon">▶</span><h2>YouTube Data API</h2><p>חיבור רשמי להצגת שירים חדשים לפי ערוצי האמנים.</p><span className="pill warning">ממתין למפתח API</span><ol><li>צור פרויקט ב-Google Cloud.</li><li>הפעל YouTube Data API v3.</li><li>צור API Key והוסף אותו ב-Supabase → Edge Functions → Secrets בשם <code>YOUTUBE_API_KEY</code>.</li></ol></article><article className="settings-card"><span className="settings-icon">G</span><h2>Google OAuth</h2><p>חיבור Google לצורך כניסה לחשבון. קריאת מינויים והרשמה לערוצים עדיין אינן ממומשות באתר.</p><span className="pill warning">טרם הוגדר</span><p className="fine">יש להגדיר OAuth Client ב-Google Cloud ולהפעיל את Google Provider ב-Supabase Authentication. פרטי הלקוח מוגדרים שם — לא בקוד האתר. הרשאת YouTube אינה פעילה עד להשלמת הבדיקה מקצה לקצה.</p></article></div>}
       <footer>המוזיקה שלי · התוצאות מגיעות מ-YouTube הרשמי · הממשק בעברית</footer>

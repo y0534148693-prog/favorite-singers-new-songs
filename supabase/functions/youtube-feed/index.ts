@@ -17,6 +17,13 @@ async function youtubeGet(path: string, params: Record<string, string>, apiKey: 
   const response = await fetch("https://www.googleapis.com/youtube/v3/" + path + "?" + query);
   const payload = await response.json();
   if (!response.ok) {
+    const reason = String(payload?.error?.errors?.[0]?.reason ?? "");
+    if (["quotaExceeded", "dailyLimitExceeded", "userRateLimitExceeded"].includes(reason)) {
+      throw new Error("מכסת הבקשות של YouTube API נוצלה. בדוק את המכסה ב-Google Cloud ונסה שוב מאוחר יותר.");
+    }
+    if (reason === "accessNotConfigured") {
+      throw new Error("יש להפעיל את YouTube Data API v3 בפרויקט Google Cloud.");
+    }
     const message = payload?.error?.message ?? "YouTube API request failed (" + response.status + ")";
     throw new Error(message);
   }

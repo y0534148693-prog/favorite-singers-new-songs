@@ -44,17 +44,36 @@ Deno.serve(async (req: Request) => {
     if (!response.ok) {
       return json({ error: "youtube_api_error", message: "YouTube API request failed (" + response.status + ")." }, 502);
     }
-    const items = (payload.items ?? []).flatMap((item: any) => {
-      const id = item.id?.channelId;
+    const searchItems = (payload.items ?? []).filter((item: any) => item.id?.channelId && item.snippet);
+    const ids = searchItems.map((item: any) => String(item.id.channelId));
+    let statsById = new Map<string, any>();
+    if (ids.length) {
+      const statsParams = new URLSearchParams({
+        key: apiKey,
+        part: "snippet,statistics",
+        id: ids.join(","),
+        maxResults: "50",
+      });
+      const statsResponse = await fetch("https://www.googleapis.com/youtube/v3/channels?" + statsParams);
+      const statsPayload = await statsResponse.json();
+      if (statsResponse.ok) statsById = new Map((statsPayload.items ?? []).map((channel: any) => [String(channel.id), channel]));
+    }
+    const items = searchItems.map((item: any) => {
+      const id = String(item.id.channelId);
       const snippet = item.snippet;
-      if (!id || !snippet) return [];
-      return [{
+      const channel = statsById.get(id);
+      const statistics = channel?.statistics ?? {};
+      return {
         channel_id: id,
         title: String(snippet.title ?? ""),
         description: String(snippet.description ?? ""),
         thumbnail_url: snippet.thumbnails?.high?.url ?? snippet.thumbnails?.medium?.url ?? snippet.thumbnails?.default?.url ?? null,
         channel_url: "https://www.youtube.com/channel/" + id,
-      }];
+        custom_url: channel?.snippet?.customUrl ?? null,
+        subscriber_count: statistics.hiddenSubscriberCount ? null : Number(statistics.subscriberCount ?? 0),
+        view_count: Number(statistics.viewCount ?? 0),
+        video_count: Number(statistics.videoCount ?? 0),
+      };
     });
     return json({ items, fetched_at: new Date().toISOString() });
   } catch {

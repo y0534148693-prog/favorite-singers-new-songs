@@ -5,3 +5,5 @@
 @media(max-width:460px){.auth-card{padding:28px 20px}.topbar h1{font-size:23px}.song-grid{grid-template-columns:1fr}.artist-row{flex-wrap:wrap}.artist-copy{min-width:150px}}
 
 .settings-card button{display:block;width:100%;margin-top:10px}.subscriptions-panel{margin-top:28px}.subscriptions-panel .section-intro{margin-bottom:16px}
+
+.preference-group{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}.preference-group strong{width:100%;font-size:13px;color:#c7cad4}.preference-group label{display:flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:20px;color:var(--muted);font-size:12px;cursor:pointer}.preference-group input{accent-color:var(--accent)}

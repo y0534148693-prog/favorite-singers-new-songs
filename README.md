@@ -67,7 +67,7 @@
 
 - קיים: ממשק RTL רספונסיבי, התחברות והרשמה עם Supabase Auth, הוספה והסרה של ערוצים לפי Channel ID, פיד דרך Edge Function, חיפוש, סינון ומועדפים.
 - קיים: חיפוש ערוצי YouTube דרך פונקציית שרת מאומתת; הוספה לרשימת האמנים מתוצאות החיפוש.
-- קיים: מסך „אולי תאהב” שמבצע חיפוש ערוצים לפי שמות האמנים ברשימה, מסנן ערוצים שכבר נוספו ומאפשר הסתרה מקומית בדפדפן. ההצעות הן התאמת חיפוש ולא דירוג פופולריות מאומת.
+- קיים: מסך „אולי תאהב” שמבצע חיפוש ערוצים לפי שמות האמנים ברשימה, מסנן ערוצים שכבר נוספו ושומר ערוצים שנדחו בטבלת `dismissed_artists` ב-Supabase. ההצעות הן התאמת חיפוש ולא דירוג פופולריות מאומת.
 - קיים בקוד וב-Supabase: זרימת קישור חשבון Google עם הרשאת `youtube.readonly` וייבוא מינויים באמצעות Edge Function. כדי להפעיל: להגדיר Google OAuth Client ב-Google Cloud, להוסיף את Client ID ו-Client Secret ב-Supabase → Authentication → Providers → Google, להפעיל Manual Identity Linking ב-Auth settings, ולהוסיף את כתובת האתר/localhost ל-Redirect URLs. יש לוודא שה-Consent Screen כולל את scope `https://www.googleapis.com/auth/youtube.readonly`.
 - נדרש להשלמה: אימות ערוץ רשמי מעבר לתוצאות החיפוש, המלצות אמנים, בדיקות אוטומטיות וטיפול משופר במכסות.
 - כפתור Google OAuth כבר קיים בקוד, אך יש להגדיר את Google Provider ב-Supabase ולהוסיף את פרטי OAuth ב-Google Cloud לפני השימוש. חיבור הרשאות YouTube לקריאת מינויים עדיין לא נבדק מקצה לקצה. אין להכניס Client Secret או refresh tokens לקוד הדפדפן.

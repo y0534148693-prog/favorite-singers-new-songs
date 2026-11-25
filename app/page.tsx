@@ -104,8 +104,8 @@ export default function Home() {
   }
 
   async function importSubscription(channel: {channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}) {
-    await addFoundChannel(channel);
-    setYoutubeSubscriptions(items => items.filter(item => item.channel_id !== channel.channel_id));
+    const added = await addFoundChannel(channel);
+    if (added) setYoutubeSubscriptions(items => items.filter(item => item.channel_id !== channel.channel_id));
   }
 
   async function signIn(e: React.FormEvent) {
@@ -173,12 +173,14 @@ export default function Home() {
       channel_url: channel.channel_url,
     });
     setLoading(false);
-    if (error) setNotice(error.code === '23505' ? 'הערוץ כבר נמצא ברשימה.' : error.message);
-    else {
-      setNotice(channel.title + ' נוסף לרשימת הזמרים.');
-      setChannelResults(old => old.filter(item => item.channel_id !== channel.channel_id));
-      await loadArtists();
+    if (error) {
+      setNotice(error.code === '23505' ? 'הערוץ כבר נמצא ברשימה.' : error.message);
+      return false;
     }
+    setNotice(channel.title + ' נוסף לרשימת הזמרים.');
+    setChannelResults(old => old.filter(item => item.channel_id !== channel.channel_id));
+    await loadArtists();
+    return true;
   }
 
   async function loadRecommendations() {
@@ -225,8 +227,8 @@ export default function Home() {
   }
 
   async function addRecommendedChannel(channel: {channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}) {
-    await addFoundChannel(channel);
-    setRecommendations(items => items.filter(item => item.channel_id !== channel.channel_id));
+    const added = await addFoundChannel(channel);
+    if (added) setRecommendations(items => items.filter(item => item.channel_id !== channel.channel_id));
   }
 
   async function removeArtist(id: string) {

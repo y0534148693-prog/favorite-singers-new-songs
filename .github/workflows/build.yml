@@ -52,3 +52,21 @@ jobs:
           check_unauthorized POST "$NEXT_PUBLIC_YOUTUBE_SEARCH_URL" "{}"
           check_unauthorized POST "$NEXT_PUBLIC_YOUTUBE_SUBSCRIPTIONS_URL" "{}"
       - run: npm run build
+      - name: Smoke test the production web server
+        shell: bash
+        run: |
+          npm run start > /tmp/my-music-next.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3000/ -o /tmp/my-music-home.html; then
+              if grep -q 'המוזיקה שלי' /tmp/my-music-home.html; then
+                echo "Production homepage returned the expected Hebrew app shell."
+                exit 0
+              fi
+            fi
+            sleep 1
+          done
+          cat /tmp/my-music-next.log
+          echo "Production homepage smoke test failed."
+          exit 1

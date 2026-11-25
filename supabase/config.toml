@@ -1,0 +1,10 @@
+project_id = "xigjfarewkffelltbifl"
+
+[functions.youtube-feed]
+verify_jwt = true
+
+[functions.youtube-search]
+verify_jwt = true
+
+[functions.youtube-subscriptions]
+verify_jwt = true

@@ -12,6 +12,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_gRitf6tK2XK09--297L4pg_zUjgg_Iv
       NEXT_PUBLIC_YOUTUBE_FEED_URL: https://xigjfarewkffelltbifl.supabase.co/functions/v1/youtube-feed
       NEXT_PUBLIC_YOUTUBE_SEARCH_URL: https://xigjfarewkffelltbifl.supabase.co/functions/v1/youtube-search
+      NEXT_PUBLIC_YOUTUBE_SUBSCRIPTIONS_URL: https://xigjfarewkffelltbifl.supabase.co/functions/v1/youtube-subscriptions
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

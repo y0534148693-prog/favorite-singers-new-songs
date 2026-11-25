@@ -51,7 +51,7 @@ export default function Home() {
 
   useEffect(() => {
     if (tab === 'recommendations' && session?.user) void loadRecommendations();
-  }, [tab, session?.user?.id, artists, selectedGenres, selectedLanguages]);
+  }, [tab, session?.user?.id, artists]);
 
   async function signInWithGoogle() {
     setLoading(true); setNotice('');

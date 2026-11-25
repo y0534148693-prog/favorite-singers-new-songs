@@ -28,6 +28,7 @@ export default function Home() {
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [youtubeSubscriptions, setYoutubeSubscriptions] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string;subscriber_count?:number|null}>>([]);
   const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
+  const [googleConnected, setGoogleConnected] = useState(false);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['he']);
   const [search, setSearch] = useState('');
@@ -62,10 +63,12 @@ export default function Home() {
       void loadArtists();
       void loadFavorites();
       void loadPreferences();
+      void loadGoogleIdentityStatus();
     } else {
       setArtists([]); setSongs([]); setFavorites([]); setFavoriteRows([]);
       setRecommendations([]); setDismissedIds([]); setYoutubeSubscriptions([]);
       setSelectedGenres([]); setSelectedLanguages(['he']);
+      setGoogleConnected(false);
       setPreferencesUserId(null);
       setArtistsUserId(null);
     }
@@ -87,6 +90,17 @@ export default function Home() {
     });
     setLoading(false);
     if (result.error) setNotice(result.error.message);
+  }
+
+  async function loadGoogleIdentityStatus() {
+    const userId = session.user.id;
+    const { data, error } = await supabase.auth.getUserIdentities();
+    if (!(await isCurrentUser(userId))) return;
+    if (error) {
+      setGoogleConnected(false);
+      return;
+    }
+    setGoogleConnected(data.identities.some(identity => identity.provider === 'google'));
   }
 
   async function connectYouTubeAccount() {
@@ -389,7 +403,7 @@ export default function Home() {
       <h1>המוזיקה שלי</h1>
       <p className="muted">כל השירים החדשים מהאמנים שאתה אוהב, במקום אחד.</p>
       <button type="button" className="secondary" onClick={signInWithGoogle} disabled={loading}>התחברות באמצעות Google</button>
-      <p className="fine">הכניסה באמצעות Google משמשת לאימות המשתמש בלבד. חיבור לקריאת מינויים ב-YouTube יוגדר בנפרד, לאחר הפעלת ההרשאות.</p>
+      <p className="fine">בהתחברות באמצעות Google מתבקשת גם הרשאת קריאת מינויים ב-YouTube. אם נרשמת בדוא"ל, אפשר לקשר חשבון Google במסך ההגדרות.</p>
       <form onSubmit={signIn} className="stack">
         <label>כתובת אימייל<input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="name@example.com" /></label>
         <label>סיסמה<input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} placeholder="לפחות 6 תווים" /></label>
@@ -453,7 +467,7 @@ export default function Home() {
         <div className="artist-list">{recommendations.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}{channel.subscriber_count ? ' · ' + channel.subscriber_count.toLocaleString('he-IL') + ' מנויים' : ''}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">בדוק ערוץ ↗</a><button className="primary" disabled={loading} onClick={() => addRecommendedChannel(channel)}>הוסף</button><button className="remove" onClick={() => dismissRecommendation(channel.channel_id, channel.title)}>לא מעוניין</button></div>)}</div>
       </>}
 
-      {tab === 'connect' && <div className="settings-grid"><article className="settings-card"><span className="settings-icon">♫</span><h2>העדפות מוזיקה</h2><p>בחר סגנונות ושפות כדי להתאים את חיפוש ההמלצות.</p><div className="preference-group"><strong>סגנונות</strong>{['פופ','מזרחית','ים תיכוני','חסידי','רוק','היפ הופ','אלקטרוני','אקוסטי'].map(genre => <label key={genre}><input type="checkbox" checked={selectedGenres.includes(genre)} onChange={e => setSelectedGenres(old => e.target.checked ? [...old, genre] : old.filter(item => item !== genre))} />{genre}</label>)}</div><div className="preference-group"><strong>שפות</strong>{[{value:'he',label:'עברית'},{value:'en',label:'אנגלית'}].map(language => <label key={language.value}><input type="checkbox" checked={selectedLanguages.includes(language.value)} onChange={e => setSelectedLanguages(old => e.target.checked ? [...old, language.value] : old.filter(item => item !== language.value))} />{language.label}</label>)}</div><button className="primary" onClick={savePreferences} disabled={loading}>שמור העדפות</button></article><article className="settings-card"><span className="settings-icon">▶</span><h2>YouTube Data API</h2><p>חיבור רשמי להצגת שירים חדשים לפי ערוצי האמנים.</p><span className="pill warning">ממתין למפתח API</span><ol><li>צור פרויקט ב-Google Cloud.</li><li>הפעל YouTube Data API v3.</li><li>צור API Key והוסף אותו ב-Supabase → Edge Functions → Secrets בשם <code>YOUTUBE_API_KEY</code>.</li></ol></article><article className="settings-card"><span className="settings-icon">G</span><h2>חיבור חשבון YouTube</h2><p>קישור חשבון Google לחשבון האתר, עם הרשאה לקריאת רשימת המינויים שלך ב-YouTube.</p><span className="pill warning">דורש הגדרת Google OAuth</span><button className="primary" onClick={connectYouTubeAccount} disabled={loading}>חבר חשבון Google</button><button className="secondary" onClick={importYouTubeSubscriptions} disabled={subscriptionsLoading}>{subscriptionsLoading ? 'טוען מינויים…' : 'ייבא מינויים מ-YouTube'}</button><p className="fine">יש להגדיר Google Provider ב-Supabase ולהפעיל Manual Identity Linking. ההרשאה המבוקשת היא youtube.readonly. אסימון Google נשלח לפונקציית שרת מאומתת ואינו נשמר במסד הנתונים.</p></article></div>}
+      {tab === 'connect' && <div className="settings-grid"><article className="settings-card"><span className="settings-icon">♫</span><h2>העדפות מוזיקה</h2><p>בחר סגנונות ושפות כדי להתאים את חיפוש ההמלצות.</p><div className="preference-group"><strong>סגנונות</strong>{['פופ','מזרחית','ים תיכוני','חסידי','רוק','היפ הופ','אלקטרוני','אקוסטי'].map(genre => <label key={genre}><input type="checkbox" checked={selectedGenres.includes(genre)} onChange={e => setSelectedGenres(old => e.target.checked ? [...old, genre] : old.filter(item => item !== genre))} />{genre}</label>)}</div><div className="preference-group"><strong>שפות</strong>{[{value:'he',label:'עברית'},{value:'en',label:'אנגלית'}].map(language => <label key={language.value}><input type="checkbox" checked={selectedLanguages.includes(language.value)} onChange={e => setSelectedLanguages(old => e.target.checked ? [...old, language.value] : old.filter(item => item !== language.value))} />{language.label}</label>)}</div><button className="primary" onClick={savePreferences} disabled={loading}>שמור העדפות</button></article><article className="settings-card"><span className="settings-icon">▶</span><h2>YouTube Data API</h2><p>חיבור רשמי להצגת שירים חדשים לפי ערוצי האמנים.</p><span className="pill warning">ממתין למפתח API</span><ol><li>צור פרויקט ב-Google Cloud.</li><li>הפעל YouTube Data API v3.</li><li>צור API Key והוסף אותו ב-Supabase → Edge Functions → Secrets בשם <code>YOUTUBE_API_KEY</code>.</li></ol></article><article className="settings-card"><span className="settings-icon">G</span><h2>חיבור חשבון YouTube</h2><p>קישור חשבון Google לחשבון האתר, עם הרשאה לקריאת רשימת המינויים שלך ב-YouTube.</p><span className="pill warning">{googleConnected ? 'חשבון Google מחובר' : 'דורש הגדרת Google OAuth'}</span><button className="primary" onClick={connectYouTubeAccount} disabled={loading || googleConnected}>{googleConnected ? 'Google מחובר' : 'חבר חשבון Google'}</button><button className="secondary" onClick={importYouTubeSubscriptions} disabled={subscriptionsLoading}>{subscriptionsLoading ? 'טוען מינויים…' : 'ייבא מינויים מ-YouTube'}</button><p className="fine">יש להגדיר Google Provider ב-Supabase ולהפעיל Manual Identity Linking. ההרשאה המבוקשת היא youtube.readonly. אסימון Google נשלח לפונקציית שרת מאומתת ואינו נשמר במסד הנתונים.</p></article></div>}
       {tab === 'connect' && youtubeSubscriptions.length > 0 && <section className="subscriptions-panel"><div className="section-intro"><h2>המינויים שלך ב-YouTube</h2><p>בחר ערוצים להוספה לרשימת האמנים באתר.</p></div><div className="artist-list">{youtubeSubscriptions.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}{channel.subscriber_count ? ' · ' + channel.subscriber_count.toLocaleString('he-IL') + ' מנויים' : ''}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">פתיחת הערוץ ↗</a><button className="primary" onClick={() => importSubscription(channel)} disabled={loading || artists.some(a => a.channel_id === channel.channel_id)}>{artists.some(a => a.channel_id === channel.channel_id) ? 'כבר נוסף' : 'הוסף לאמנים'}</button></div>)}</div></section>}
       <footer>המוזיקה שלי · התוצאות מגיעות מ-YouTube הרשמי · הממשק בעברית</footer>
     </section>

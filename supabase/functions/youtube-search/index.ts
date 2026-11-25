@@ -42,7 +42,13 @@ Deno.serve(async (req: Request) => {
     const response = await fetch("https://www.googleapis.com/youtube/v3/search?" + params);
     const payload = await response.json();
     if (!response.ok) {
-      return json({ error: "youtube_api_error", message: "YouTube API request failed (" + response.status + ")." }, 502);
+      const reason = String(payload?.error?.errors?.[0]?.reason ?? "");
+      const message = ["quotaExceeded", "dailyLimitExceeded", "userRateLimitExceeded"].includes(reason)
+        ? "מכסת הבקשות של YouTube API נוצלה. בדוק את המכסה ב-Google Cloud ונסה שוב מאוחר יותר."
+        : reason === "accessNotConfigured"
+          ? "יש להפעיל את YouTube Data API v3 בפרויקט Google Cloud."
+          : "YouTube API לא הצליח לבצע את החיפוש כרגע (" + response.status + ").";
+      return json({ error: "youtube_api_error", message }, 502);
     }
     const searchItems = (payload.items ?? []).filter((item: any) => item.id?.channelId && item.snippet);
     const ids = searchItems.map((item: any) => String(item.id.channelId));

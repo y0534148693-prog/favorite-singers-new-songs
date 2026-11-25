@@ -46,8 +46,9 @@
 
 פרויקט Supabase בשם `my-music` באזור `eu-central-1`:
 - טבלאות `profiles`, `user_artists`, `dismissed_artists`, `favorite_songs`, `music_preferences`.
-- מדיניות RLS מגבילה נתוני משתמשים לבעליהם.
-- `private.youtube_connections` נשמרת בסכמה פרטית.
+- מדיניות RLS מגבילה נתוני משתמשים לבעליהם; כל חמש טבלאות `public` מוגנות ב-RLS.
+- `private.youtube_connections` נשמרת בסכמה פרטית ללא הרשאות `USAGE` או `SELECT` לתפקידי `anon` ו-`authenticated`; אין מדיניות שמעניקה גישה, ולכן הנתונים חסומים בכוונה.
+- `lib/database.types.ts` נוצר מהסכמה החיה ומשמש לטיפוסי TypeScript של לקוח Supabase.
 - שלוש Edge Functions מאובטחות (`youtube-feed`, `youtube-search`, `youtube-subscriptions`) דורשות JWT ומאמתות את המשתמש. כל הטבלאות ב-`public` מפעילות RLS עם מדיניות בעלות. הטבלה `private.youtube_connections` חסומה למשתמשי API רגילים.
 
 ## חיפוש ערוצים
@@ -75,6 +76,18 @@
 7. ב-Google Auth Platform → Data Access, הוסף את scope `https://www.googleapis.com/auth/youtube.readonly`.
 
 חיבור Google אינו פעיל עד להשלמת ההגדרות האלה. כפתור ההתחברות של Google מבקש גם את scope `youtube.readonly`, כדי שהאסימון הזמני יוכל לשמש לייבוא מינויים. אם המשתמש נרשם בדוא"ל/סיסמה, כפתור חיבור YouTube מקשר זהות Google לחשבון הקיים. אם Google כבר מחובר, אין ניסיון לקשר את אותה זהות פעם נוספת. בעת ייבוא מינויים, האסימון מועבר לפונקציית Edge מאומתת ואינו נכתב למסד הנתונים. אם האסימון פג, יש להתחבר מחדש דרך Google.
+
+## בדיקות אוטומטיות
+
+GitHub Actions מריץ בכל שינוי:
+- `npm ci`
+- `npm run typecheck`
+- `npm test` (4 בדיקות יחידה)
+- בדיקת HTTP חיה שמוודאת שכל שלוש Edge Functions מחזירות 401 ללא JWT תקף
+- `npm run build`
+- הפעלת שרת Production ובדיקת HTTP שהדף הראשי מחזיר את מעטפת האתר בעברית
+
+הבדיקות אינן מחליפות בדיקת התחברות אמיתית, הרשאות YouTube או פעולות משתמש בדפדפן.
 
 ## מצב הפיתוח הנוכחי
 

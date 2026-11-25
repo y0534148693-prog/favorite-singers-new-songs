@@ -1,0 +1,25 @@
+name: Build and typecheck
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://xigjfarewkffelltbifl.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_gRitf6tK2XK09--297L4pg_zUjgg_Iv
+      NEXT_PUBLIC_YOUTUBE_FEED_URL: https://xigjfarewkffelltbifl.supabase.co/functions/v1/youtube-feed
+      NEXT_PUBLIC_YOUTUBE_SEARCH_URL: https://xigjfarewkffelltbifl.supabase.co/functions/v1/youtube-search
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run build

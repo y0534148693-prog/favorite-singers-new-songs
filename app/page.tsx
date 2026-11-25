@@ -383,7 +383,10 @@ export default function Home() {
       if (!response.ok) throw new Error(body.message || 'לא ניתן לטעון שירים כרגע.');
       if (!(await isCurrentUser(current.user.id))) return;
       setSongs(sortSongsNewestFirst(body.items ?? []));
-      if (body.errors?.length) setFeedError('חלק מהערוצים לא נטענו. אפשר לנסות שוב מאוחר יותר.');
+      if (body.errors?.length) {
+        const detail = body.errors.find((item: { message?: string }) => item.message)?.message;
+        setFeedError(detail ? 'חלק מהערוצים לא נטענו: ' + detail : 'חלק מהערוצים לא נטענו. אפשר לנסות שוב מאוחר יותר.');
+      }
     } catch (error) {
       if (!requestedUserId || await isCurrentUser(requestedUserId)) {
         setSongs([]);
@@ -458,7 +461,9 @@ export default function Home() {
           <button className="primary" onClick={loadFeed} disabled={loading}>{loading ? 'טוען…' : '↻　רענן שירים'}</button>
         </div>
         <div className="toolbar"><input value={search} onChange={e => setSearch(e.target.value)} placeholder="חיפוש שיר או אמן…" /><select value={filterArtist} onChange={e => setFilterArtist(e.target.value)}><option value="all">כל האמנים</option>{artists.map(a => <option key={a.id} value={a.artist_name}>{a.artist_name}</option>)}</select></div>
-        {feedError && <div className="empty-state"><strong>עדיין לא ניתן להציג שירים</strong><p>{feedError}</p><small>לאחר הוספת מפתח YouTube API בשירות Edge Function, התוצאות יופיעו כאן.</small></div>}
+        {feedError && (songs.length
+          ? <div className="notice inline-notice">{feedError}</div>
+          : <div className="empty-state"><strong>עדיין לא ניתן להציג שירים</strong><p>{feedError}</p><small>בדוק שמפתח YouTube API הוגדר ב-Supabase וש-YouTube Data API v3 מופעל.</small></div>)}
         {!songs.length && !feedError && <div className="empty-state"><div className="empty-icon">♫</div><strong>הפיד שלך מחכה לשיר הראשון</strong><p>הוסף אמנים ואז לחץ על „רענן שירים”.</p><button className="secondary" onClick={() => setTab('artists')}>הוספת אמנים</button></div>}
         {!!songs.length && !visibleSongs.length && <div className="empty-state"><strong>לא נמצאו שירים לפי הסינון</strong><p>נסה לשנות את מילות החיפוש או לבחור „כל האמנים”.</p><button className="secondary" onClick={() => { setSearch(''); setFilterArtist('all'); }}>נקה סינון</button></div>}
         <div className="song-grid">{visibleSongs.map(song => <article className="song-card" key={song.youtube_video_id}>

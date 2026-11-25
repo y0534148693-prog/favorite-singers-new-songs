@@ -37,6 +37,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState('');
   const [feedError, setFeedError] = useState('');
+  const [feedLoadedUserId, setFeedLoadedUserId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -59,7 +60,7 @@ export default function Home() {
       setArtists([]); setSongs([]); setFavorites([]); setFavoriteRows([]);
       setRecommendations([]); setDismissedIds([]); setYoutubeSubscriptions([]);
       setSelectedGenres([]); setSelectedLanguages(['he']);
-      setSearch(''); setFilterArtist('all'); setFeedError('');
+      setSearch(''); setFilterArtist('all'); setFeedError(''); setFeedLoadedUserId(null);
       setPreferencesUserId(null);
       setArtistsUserId(null);
       void loadArtists();
@@ -69,7 +70,7 @@ export default function Home() {
       setArtists([]); setSongs([]); setFavorites([]); setFavoriteRows([]);
       setRecommendations([]); setDismissedIds([]); setYoutubeSubscriptions([]);
       setSelectedGenres([]); setSelectedLanguages(['he']);
-      setGoogleConnected(false);
+      setGoogleConnected(false); setFeedLoadedUserId(null);
       setPreferencesUserId(null);
       setArtistsUserId(null);
     }
@@ -78,6 +79,12 @@ export default function Home() {
   useEffect(() => {
     if (tab === 'recommendations' && session?.user && preferencesUserId === session.user.id && artistsUserId === session.user.id) void loadRecommendations();
   }, [tab, session?.user?.id, artists, preferencesUserId, artistsUserId]);
+
+  useEffect(() => {
+    if (tab === 'songs' && session?.user && artistsUserId === session.user.id && artists.length > 0 && feedLoadedUserId !== session.user.id && !loading) {
+      void loadFeed();
+    }
+  }, [tab, session?.user?.id, artistsUserId, artists.length, feedLoadedUserId, loading]);
 
   useEffect(() => {
     if (session?.user) void loadGoogleIdentityStatus();
@@ -184,6 +191,7 @@ export default function Home() {
   async function loadArtists() {
     const userId = session.user.id;
     setArtistsUserId(null);
+    setFeedLoadedUserId(null);
     const { data, error } = await supabase.from('user_artists').select('id,channel_id,artist_name,channel_title,thumbnail_url').eq('user_id', userId).order('added_at', { ascending: false });
     if (!(await isCurrentUser(userId))) return;
     if (error) setNotice(error.message);
@@ -358,9 +366,11 @@ export default function Home() {
   }
 
   async function loadFeed() {
+    let requestedUserId: string | null = null;
     setLoading(true); setFeedError(''); setNotice('');
     try {
       const { data: { session: current } } = await supabase.auth.getSession();
+      requestedUserId = current?.user.id ?? null;
       const endpoint = process.env.NEXT_PUBLIC_YOUTUBE_FEED_URL;
       if (!endpoint || !current) throw new Error('חסר חיבור תקין לשירות.');
       const response = await fetch(endpoint, {
@@ -379,6 +389,7 @@ export default function Home() {
       setFeedError(error instanceof Error ? error.message : 'לא ניתן לטעון שירים כרגע.');
     } finally {
       setLoading(false);
+      if (requestedUserId && await isCurrentUser(requestedUserId)) setFeedLoadedUserId(requestedUserId);
     }
   }
 

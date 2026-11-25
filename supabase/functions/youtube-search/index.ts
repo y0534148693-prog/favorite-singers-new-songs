@@ -27,7 +27,7 @@ Deno.serve(async (req: Request) => {
   if (authError || !authData.user) return json({ error: "unauthorized" }, 401);
 
   const apiKey = Deno.env.get("YOUTUBE_API_KEY");
-  if (!apiKey) return json({ error: "youtube_api_not_configured", message: "Add YOUTUBE_API_KEY to Supabase Edge Function secrets." }, 503);
+  if (!apiKey) return json({ error: "youtube_api_not_configured", message: "יש להוסיף את YOUTUBE_API_KEY לסודות של Edge Functions ב-Supabase." }, 503);
 
   let body: { query?: string };
   try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }

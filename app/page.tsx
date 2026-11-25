@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { filterSongs, normalizeYouTubeChannelId, sortSongsNewestFirst } from '@/lib/music-utils.mjs';
 
 type Artist = { id: string; channel_id: string; artist_name: string; channel_title: string | null; thumbnail_url: string | null; channel_url?: string | null };
 type Song = { youtube_video_id: string; title: string; artist_name: string; thumbnail_url: string | null; published_at: string | null; video_url: string; official_confidence?: string; official_label?: string };
 
 export default function Home() {
   const [session, setSession] = useState<any>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [preferencesUserId, setPreferencesUserId] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
@@ -33,32 +36,46 @@ export default function Home() {
   const [feedError, setFeedError] = useState('');
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
-    return () => listener.subscription.unsubscribe();
+    let active = true;
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      if (error) setNotice('לא ניתן לבדוק את מצב ההתחברות. נסה לרענן את הדף.');
+      setSession(data.session);
+      setAuthReady(true);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
+      setSession(next);
+      setAuthReady(true);
+    });
+    return () => { active = false; listener.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
     if (session?.user) {
       void loadArtists();
       void loadFavorites();
+      setPreferencesUserId(null);
       void loadPreferences();
     } else {
       setArtists([]); setSongs([]); setFavorites([]); setFavoriteRows([]);
-      setRecommendations([]);
+      setRecommendations([]); setDismissedIds([]); setYoutubeSubscriptions([]);
+      setSelectedGenres([]); setSelectedLanguages(['he']);
+      setPreferencesUserId(null);
     }
   }, [session?.user?.id]);
 
   useEffect(() => {
-    if (tab === 'recommendations' && session?.user) void loadRecommendations();
-  }, [tab, session?.user?.id, artists]);
+    if (tab === 'recommendations' && session?.user && preferencesUserId === session.user.id) void loadRecommendations();
+  }, [tab, session?.user?.id, artists, preferencesUserId]);
 
   async function signInWithGoogle() {
     setLoading(true); setNotice('');
     const result = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
+        scopes: 'openid email profile https://www.googleapis.com/auth/youtube.readonly',
         redirectTo: window.location.origin,
+        queryParams: { access_type: 'offline', prompt: 'consent' },
       },
     });
     setLoading(false);
@@ -67,10 +84,21 @@ export default function Home() {
 
   async function connectYouTubeAccount() {
     setLoading(true); setNotice('');
+    const { data: identityData, error: identityError } = await supabase.auth.getUserIdentities();
+    if (identityError) {
+      setLoading(false);
+      setNotice(identityError.message);
+      return;
+    }
+    if (identityData.identities.some(identity => identity.provider === 'google')) {
+      setLoading(false);
+      setNotice('חשבון Google כבר מחובר. אפשר לייבא את המינויים מ-YouTube. אם ההרשאה חסרה, התנתק והתחבר מחדש באמצעות Google.');
+      return;
+    }
     const { error } = await supabase.auth.linkIdentity({
       provider: 'google',
       options: {
-        scopes: 'https://www.googleapis.com/auth/youtube.readonly',
+        scopes: 'openid email profile https://www.googleapis.com/auth/youtube.readonly',
         redirectTo: window.location.origin,
         queryParams: { access_type: 'offline', prompt: 'consent' },
       },
@@ -136,10 +164,15 @@ export default function Home() {
   async function addArtist(e: React.FormEvent) {
     e.preventDefault();
     if (!artistName.trim() || !channelId.trim()) return;
+    const normalizedChannelId = normalizeYouTubeChannelId(channelId);
+    if (!normalizedChannelId) {
+      setNotice('מזהה הערוץ אינו תקין. הזן מזהה שמתחיל ב-UC או קישור לערוץ YouTube.');
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.from('user_artists').insert({
-      user_id: session.user.id, artist_name: artistName.trim(), channel_id: channelId.trim(),
-      channel_url: `https://www.youtube.com/channel/${channelId.trim()}`
+      user_id: session.user.id, artist_name: artistName.trim(), channel_id: normalizedChannelId,
+      channel_url: `https://www.youtube.com/channel/${normalizedChannelId}`
     });
     setLoading(false);
     if (error) setNotice(error.code === '23505' ? 'האמן כבר נמצא ברשימה.' : error.message);
@@ -187,14 +220,21 @@ export default function Home() {
   }
 
   async function loadPreferences() {
-    const { data, error } = await supabase.from('music_preferences')
-      .select('genres,language_preferences')
-      .eq('user_id', session.user.id)
-      .maybeSingle();
-    if (error) { setNotice(error.message); return; }
-    if (data) {
-      setSelectedGenres(data.genres ?? []);
-      setSelectedLanguages(data.language_preferences ?? ['he']);
+    setPreferencesUserId(null);
+    try {
+      const { data, error } = await supabase.from('music_preferences')
+        .select('genres,language_preferences')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+      if (error) throw error;
+      setSelectedGenres(data?.genres ?? []);
+      setSelectedLanguages(data?.language_preferences?.length ? data.language_preferences : ['he']);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'לא ניתן לטעון את העדפות המוזיקה.');
+      setSelectedGenres([]);
+      setSelectedLanguages(['he']);
+    } finally {
+      setPreferencesUserId(session.user.id);
     }
   }
 
@@ -208,7 +248,10 @@ export default function Home() {
     }, { onConflict: 'user_id' });
     setLoading(false);
     if (error) setNotice(error.message);
-    else setNotice('העדפות המוזיקה נשמרו.');
+    else {
+      setNotice('העדפות המוזיקה נשמרו.');
+      if (tab === 'recommendations') void loadRecommendations();
+    }
   }
 
   async function loadRecommendations() {
@@ -284,7 +327,7 @@ export default function Home() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.message || 'לא ניתן לטעון שירים כרגע.');
-      setSongs(body.items ?? []);
+      setSongs(sortSongsNewestFirst(body.items ?? []));
       if (body.errors?.length) setFeedError('חלק מהערוצים לא נטענו. אפשר לנסות שוב מאוחר יותר.');
     } catch (error) {
       setSongs([]);
@@ -309,11 +352,10 @@ export default function Home() {
     }
   }
 
-  const visibleSongs = useMemo(() => songs.filter(song =>
-    (filterArtist === 'all' || song.artist_name === filterArtist) &&
-    `${song.title} ${song.artist_name}`.toLowerCase().includes(search.toLowerCase())
-  ), [songs, filterArtist, search]);
+  const visibleSongs = useMemo(() => filterSongs(songs, search, filterArtist), [songs, filterArtist, search]);
   const favoriteSongs = favoriteRows;
+
+  if (!authReady) return <main className="auth-shell"><section className="auth-card"><div className="brand-mark">♫</div><h1>המוזיקה שלי</h1><p className="muted">בודק את מצב ההתחברות…</p></section></main>;
 
   if (!session) return <main className="auth-shell">
     <section className="auth-card">
@@ -378,7 +420,7 @@ export default function Home() {
       {tab === 'favorites' && <><div className="section-intro"><h2>המועדפים שלך</h2><p>שירים ששמרת מהפיד.</p></div><div className="song-grid">{favoriteSongs.map(song => <article className="song-card" key={song.youtube_video_id}><a href={song.video_url} target="_blank" rel="noreferrer" className="thumb">{song.thumbnail_url && <img src={song.thumbnail_url} alt="" />}<span className="play">▶</span></a><div className="song-info"><div><h3>{song.title}</h3><p>{song.artist_name}</p></div><button className="heart saved" onClick={() => toggleFavorite(song)}>♥</button></div></article>)}</div>{!favorites.length && <div className="empty-state"><strong>עוד אין לך מועדפים</strong><p>שמור שירים מהמסך „שירים חדשים”.</p></div>}</>}
 
       {tab === 'recommendations' && <>
-        <div className="section-intro"><h2>ערוצים שאולי יתאימו לטעם שלך</h2><p>ההצעות מבוססות על חיפוש YouTube לפי שמות האמנים שכבר הוספת. זו התאמת חיפוש ראשונית, לא דירוג פופולריות או אימות רשמי.</p></div>
+        <div className="section-intro"><h2>ערוצים שאולי יתאימו לטעם שלך</h2><p>ההצעות מבוססות על שמות האמנים והעדפות המוזיקה שלך. הן ממוינות לפי מספר המנויים הגלוי כשנתון זה זמין, אך אינן אימות רשמי או דירוג דמיון סמנטי.</p></div>
         <div className="toolbar"><button className="secondary" onClick={loadRecommendations} disabled={loading}>{loading ? 'מחפש…' : '↻ רענן הצעות'}</button></div>
         {!artists.length && !selectedGenres.length && <div className="empty-state"><strong>כדאי לבחור סגנון מוזיקלי או להוסיף אמן</strong><p>אפשר לשמור העדפות במסך החיבורים וההגדרות.</p><button className="secondary" onClick={() => setTab('connect')}>בחירת העדפות</button></div>}
         {artists.length > 0 && !recommendations.length && <div className="empty-state"><strong>אין כרגע הצעות חדשות</strong><p>אפשר לרענן את החיפוש בהמשך.</p></div>}

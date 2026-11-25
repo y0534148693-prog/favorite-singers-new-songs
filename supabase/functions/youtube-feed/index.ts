@@ -57,7 +57,7 @@ Deno.serve(async (req: Request) => {
   if (!apiKey) {
     return json({
       error: "youtube_api_not_configured",
-      message: "Add YOUTUBE_API_KEY to the Edge Function secrets to enable live YouTube results.",
+      message: "יש להוסיף את YOUTUBE_API_KEY לסודות של Edge Functions ב-Supabase כדי להפעיל תוצאות YouTube.",
       artists_count: artists.length,
     }, 503);
   }

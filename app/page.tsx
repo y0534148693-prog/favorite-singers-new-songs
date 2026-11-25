@@ -53,10 +53,14 @@ export default function Home() {
 
   useEffect(() => {
     if (session?.user) {
-      void loadArtists();
-      void loadFavorites();
+      setArtists([]); setSongs([]); setFavorites([]); setFavoriteRows([]);
+      setRecommendations([]); setDismissedIds([]); setYoutubeSubscriptions([]);
+      setSelectedGenres([]); setSelectedLanguages(['he']);
+      setSearch(''); setFilterArtist('all'); setFeedError('');
       setPreferencesUserId(null);
       setArtistsUserId(null);
+      void loadArtists();
+      void loadFavorites();
       void loadPreferences();
     } else {
       setArtists([]); setSongs([]); setFavorites([]); setFavoriteRows([]);
@@ -431,7 +435,7 @@ export default function Home() {
         <div className="section-intro"><h2>ערוצים שאולי יתאימו לטעם שלך</h2><p>ההצעות מבוססות על שמות האמנים והעדפות המוזיקה שלך. הן ממוינות לפי מספר המנויים הגלוי כשנתון זה זמין, אך אינן אימות רשמי או דירוג דמיון סמנטי.</p></div>
         <div className="toolbar"><button className="secondary" onClick={loadRecommendations} disabled={loading}>{loading ? 'מחפש…' : '↻ רענן הצעות'}</button></div>
         {!artists.length && !selectedGenres.length && <div className="empty-state"><strong>כדאי לבחור סגנון מוזיקלי או להוסיף אמן</strong><p>אפשר לשמור העדפות במסך החיבורים וההגדרות.</p><button className="secondary" onClick={() => setTab('connect')}>בחירת העדפות</button></div>}
-        {artists.length > 0 && !recommendations.length && <div className="empty-state"><strong>אין כרגע הצעות חדשות</strong><p>אפשר לרענן את החיפוש בהמשך.</p></div>}
+        {(artists.length > 0 || selectedGenres.length > 0) && !recommendations.length && !loading && <div className="empty-state"><strong>אין כרגע הצעות חדשות</strong><p>אפשר לרענן את החיפוש בהמשך או לשנות את העדפות המוזיקה.</p></div>}
         <div className="artist-list">{recommendations.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}{channel.subscriber_count ? ' · ' + channel.subscriber_count.toLocaleString('he-IL') + ' מנויים' : ''}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">בדוק ערוץ ↗</a><button className="primary" disabled={loading} onClick={() => addRecommendedChannel(channel)}>הוסף</button><button className="remove" onClick={() => dismissRecommendation(channel.channel_id, channel.title)}>לא מעוניין</button></div>)}</div>
       </>}
 

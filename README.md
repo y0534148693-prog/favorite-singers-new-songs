@@ -91,5 +91,8 @@
 ## פקודות
 
 - `npm run dev` — שרת פיתוח
+- `npm run typecheck` — בדיקת TypeScript
+- `npm test` — בדיקות יחידה לפונקציות עזר
+- `npm run check` — TypeScript, בדיקות יחידה ו-build ברצף
 - `npm run build` — יצירת build לייצור
 - `npm run start` — הפעלת build קיים

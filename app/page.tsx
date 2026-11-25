@@ -10,6 +10,7 @@ type Song = { youtube_video_id: string; title: string; artist_name: string; thum
 export default function Home() {
   const [session, setSession] = useState<any>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [authRevision, setAuthRevision] = useState(0);
   const [preferencesUserId, setPreferencesUserId] = useState<string | null>(null);
   const [artistsUserId, setArtistsUserId] = useState<string | null>(null);
   const [email, setEmail] = useState('');
@@ -48,6 +49,7 @@ export default function Home() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next);
       setAuthReady(true);
+      setAuthRevision(revision => revision + 1);
     });
     return () => { active = false; listener.subscription.unsubscribe(); };
   }, []);
@@ -63,7 +65,6 @@ export default function Home() {
       void loadArtists();
       void loadFavorites();
       void loadPreferences();
-      void loadGoogleIdentityStatus();
     } else {
       setArtists([]); setSongs([]); setFavorites([]); setFavoriteRows([]);
       setRecommendations([]); setDismissedIds([]); setYoutubeSubscriptions([]);
@@ -77,6 +78,11 @@ export default function Home() {
   useEffect(() => {
     if (tab === 'recommendations' && session?.user && preferencesUserId === session.user.id && artistsUserId === session.user.id) void loadRecommendations();
   }, [tab, session?.user?.id, artists, preferencesUserId, artistsUserId]);
+
+  useEffect(() => {
+    if (session?.user) void loadGoogleIdentityStatus();
+    else setGoogleConnected(false);
+  }, [session?.user?.id, authRevision]);
 
   async function signInWithGoogle() {
     setLoading(true); setNotice('');

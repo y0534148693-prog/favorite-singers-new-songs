@@ -24,8 +24,13 @@ async function youtubeGet(path: string, params: Record<string, string>, apiKey: 
     if (reason === "accessNotConfigured") {
       throw new Error("יש להפעיל את YouTube Data API v3 בפרויקט Google Cloud.");
     }
-    const message = payload?.error?.message ?? "YouTube API request failed (" + response.status + ")";
-    throw new Error(message);
+    if (reason === "keyInvalid") {
+      throw new Error("מפתח YouTube API אינו תקין. בדוק את YOUTUBE_API_KEY ב-Supabase Secrets.");
+    }
+    if (reason === "forbidden" || reason === "ipRefererBlocked") {
+      throw new Error("Google חסמה את בקשת YouTube API. בדוק את הגבלות המפתח ב-Google Cloud.");
+    }
+    throw new Error("YouTube API לא הצליח לטעון את נתוני הערוץ (HTTP " + response.status + ").");
   }
   return payload;
 }

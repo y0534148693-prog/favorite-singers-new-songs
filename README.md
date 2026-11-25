@@ -51,6 +51,10 @@
 - `lib/database.types.ts` נוצר מהסכמה החיה ומשמש לטיפוסי TypeScript של לקוח Supabase.
 - שלוש Edge Functions מאובטחות (`youtube-feed`, `youtube-search`, `youtube-subscriptions`) דורשות JWT ומאמתות את המשתמש. כל הטבלאות ב-`public` מפעילות RLS עם מדיניות בעלות. הטבלה `private.youtube_connections` חסומה למשתמשי API רגילים.
 
+## ניהול הסכמה ומיגרציות
+
+הסכמה הקיימת נמצאת בפרויקט Supabase הפעיל, וטיפוסי TypeScript נשמרים ב-`lib/database.types.ts`. נכון לעכשיו אין היסטוריית migrations רשומה בפרויקט. לא יצרתי קובץ migration ידני ולא הרצתי שינויי DDL נוספים, כדי לא לסכן טבלאות או נתונים קיימים. לפני שחזור הפרויקט בסביבת Supabase חדשה יש לייצא baseline migration באמצעות Supabase CLI לאחר קישור הפרויקט, לבדוק אותו מול הסכמה החיה ורק אז להחיל אותו בסביבה החדשה.
+
 ## חיפוש ערוצים
 
 נפרסה פונקציית Edge Function בשם `youtube-search`, שמאמתת JWT של המשתמש ומחפשת ערוצי YouTube דרך YouTube Data API v3. היא משתמשת באותו סוד `YOUTUBE_API_KEY`.

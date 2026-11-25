@@ -17,7 +17,7 @@
    ```
 2. התקן תלויות:
    ```bash
-   npm install
+   npm ci
    ```
 3. העתק את `.env.local.example` אל `.env.local` והשלם את הערכים:
    ```bash
@@ -61,7 +61,20 @@
 יש להגדיר ב-Supabase Dashboard → Edge Functions → Secrets:
 - `YOUTUBE_API_KEY` — מפתח YouTube Data API v3.
 
-עד להגדרת המפתח, הפיד לא יחזיר שירים. הפונקציה מבצעת סינון בסיסי של ראיונות/פודקאסטים ומחזירה סימון ביטחון לסיווג תוכן.
+עד להגדרת המפתח, הפיד לא יחזיר שירים. הפונקציה קוראת את רשימת ההעלאות של כל ערוץ באמצעות `channels.list` ו-`playlistItems.list`, כדי להימנע מחיפושי וידאו יקרים במכסות. היא בודקת את 90 הימים האחרונים, מסננת ראיונות/פודקאסטים ומסמנת תוכן עם מילות Official כ"מועמד" בלבד — לא כאימות רשמי.
+
+## הגדרת Google OAuth
+
+1. ב-Google Cloud צור OAuth Client מסוג Web Application.
+2. הוסף Authorized JavaScript origin של סביבת הפיתוח: `http://localhost:3000`.
+3. הוסף Authorized redirect URI:
+   `https://xigjfarewkffelltbifl.supabase.co/auth/v1/callback`.
+4. ב-Supabase → Authentication → Providers → Google, הפעל Google והכנס Client ID ו-Client Secret.
+5. ב-Supabase → Authentication → URL Configuration, הוסף ל-Redirect URLs את `http://localhost:3000/**`.
+6. הפעל Manual Identity Linking (Beta) בהגדרות Auth.
+7. ב-Google Auth Platform → Data Access, הוסף את scope `https://www.googleapis.com/auth/youtube.readonly`.
+
+חיבור Google אינו פעיל עד להשלמת ההגדרות האלה. בעת חיבור YouTube, האסימון מועבר לפונקציית Edge מאומתת ואינו נכתב למסד הנתונים.
 
 ## מצב הפיתוח הנוכחי
 
@@ -70,8 +83,8 @@
 - קיים: מסך „אולי תאהב” שמבצע חיפוש ערוצים לפי שמות האמנים והעדפות הז'אנר/השפה, מסנן ערוצים שכבר נוספו ושומר ערוצים שנדחו בטבלת `dismissed_artists` ב-Supabase. ההצעות הן התאמת חיפוש ולא דירוג פופולריות מאומת.
 - קיים: מסך העדפות ששומר ז'אנרים ושפות בטבלת `music_preferences` ומזין אותם לחיפוש ההמלצות.
 - קיים בקוד וב-Supabase: זרימת קישור חשבון Google עם הרשאת `youtube.readonly` וייבוא מינויים באמצעות Edge Function. כדי להפעיל: להגדיר Google OAuth Client ב-Google Cloud, להוסיף את Client ID ו-Client Secret ב-Supabase → Authentication → Providers → Google, להפעיל Manual Identity Linking ב-Auth settings, ולהוסיף את כתובת האתר/localhost ל-Redirect URLs. יש לוודא שה-Consent Screen כולל את scope `https://www.googleapis.com/auth/youtube.readonly`.
-- נדרש להשלמה: אימות ערוץ רשמי מעבר לתוצאות החיפוש, המלצות אמנים, בדיקות אוטומטיות וטיפול משופר במכסות.
-- כפתור Google OAuth כבר קיים בקוד, אך יש להגדיר את Google Provider ב-Supabase ולהוסיף את פרטי OAuth ב-Google Cloud לפני השימוש. חיבור הרשאות YouTube לקריאת מינויים עדיין לא נבדק מקצה לקצה. אין להכניס Client Secret או refresh tokens לקוד הדפדפן.
+- נדרש להשלמה: דירוג המלצות לפי פופולריות/דמיון אמיתי, אימות ערוץ רשמי מול מקורות נוספים, בדיקות אינטגרציה מקצה לקצה וטיפול מתקדם במכסות וב-cache.
+- כפתור Google OAuth וחיבור חשבון YouTube קיימים בקוד, אך דורשים את הגדרות הספק וההרשאות שבסעיף הקודם. חיבור Google עדיין לא נבדק מקצה לקצה מול חשבון אמיתי. אין להכניס Client Secret או refresh tokens לקוד הדפדפן.
 - התראות YouTube אוטומטיות אינן ממומשות; התראות ערוץ מנוהלות ב-YouTube.
 - הפרויקט עדיין לא נפרס לאתר ציבורי. אין שימוש ב-Vercel כחלק מהתהליך.
 

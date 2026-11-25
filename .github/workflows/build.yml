@@ -24,4 +24,31 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
+      - name: Verify deployed Edge Functions require authentication
+        shell: bash
+        run: |
+          check_unauthorized() {
+            local method="$1"
+            local endpoint="$2"
+            local body="$3"
+            local response_file
+            response_file="$(mktemp)"
+            local status
+            if [ "$method" = "POST" ]; then
+              status="$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" --request POST --header "apikey: $NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" --header "Content-Type: application/json" --data "$body" "$endpoint")"
+            else
+              status="$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" --request GET --header "apikey: $NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" "$endpoint")"
+            fi
+            if [ "$status" != "401" ]; then
+              echo "Expected 401 from $endpoint, got $status"
+              cat "$response_file"
+              rm -f "$response_file"
+              exit 1
+            fi
+            rm -f "$response_file"
+            echo "Unauthenticated request correctly rejected by $endpoint"
+          }
+          check_unauthorized GET "$NEXT_PUBLIC_YOUTUBE_FEED_URL" ""
+          check_unauthorized POST "$NEXT_PUBLIC_YOUTUBE_SEARCH_URL" "{}"
+          check_unauthorized POST "$NEXT_PUBLIC_YOUTUBE_SUBSCRIPTIONS_URL" "{}"
       - run: npm run build

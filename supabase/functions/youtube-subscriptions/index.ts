@@ -50,13 +50,22 @@ Deno.serve(async (req: Request) => {
       });
       const payload = await response.json();
       if (!response.ok) {
-        const status = response.status === 401 || response.status === 403 ? 401 : 502;
+        const reason = String(payload?.error?.errors?.[0]?.reason ?? "");
+        const authorizationFailure = response.status === 401 ||
+          (response.status === 403 && ["insufficientPermissions", "forbidden"].includes(reason));
+        const quotaFailure = response.status === 403 &&
+          ["quotaExceeded", "dailyLimitExceeded", "userRateLimitExceeded"].includes(reason);
+        const configurationFailure = reason === "accessNotConfigured";
         return json({
           error: "youtube_subscriptions_failed",
-          message: status === 401
+          message: authorizationFailure
             ? "ההרשאה ל-YouTube פגה או לא כוללת את youtube.readonly. חבר מחדש את החשבון."
-            : "YouTube לא הצליח להחזיר את רשימת המינויים כרגע.",
-        }, status);
+            : quotaFailure
+              ? "מכסת הבקשות של YouTube נוצלה. נסה שוב מאוחר יותר או בדוק את המכסה ב-Google Cloud."
+              : configurationFailure
+                ? "יש להפעיל את YouTube Data API v3 בפרויקט Google Cloud."
+                : "YouTube לא הצליח להחזיר את רשימת המינויים כרגע.",
+        }, authorizationFailure ? 401 : 502);
       }
       for (const item of payload.items ?? []) {
         const channel = item.snippet?.resourceId?.channelId;

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
-type Artist = { id: string; channel_id: string; artist_name: string; channel_title: string | null; thumbnail_url: string | null };
+type Artist = { id: string; channel_id: string; artist_name: string; channel_title: string | null; thumbnail_url: string | null; channel_url?: string | null };
 type Song = { youtube_video_id: string; title: string; artist_name: string; thumbnail_url: string | null; published_at: string | null; video_url: string; official_confidence?: string; official_label?: string };
 
 export default function Home() {

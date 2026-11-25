@@ -19,10 +19,10 @@ export default function Home() {
   const [artistName, setArtistName] = useState('');
   const [channelId, setChannelId] = useState('');
   const [channelQuery, setChannelQuery] = useState('');
-  const [channelResults, setChannelResults] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}>>([]);
-  const [recommendations, setRecommendations] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}>>([]);
+  const [channelResults, setChannelResults] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string;subscriber_count?:number|null}>>([]);
+  const [recommendations, setRecommendations] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string;subscriber_count?:number|null}>>([]);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
-  const [youtubeSubscriptions, setYoutubeSubscriptions] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}>>([]);
+  const [youtubeSubscriptions, setYoutubeSubscriptions] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string;subscriber_count?:number|null}>>([]);
   const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['he']);
@@ -106,7 +106,7 @@ export default function Home() {
     } finally { setSubscriptionsLoading(false); }
   }
 
-  async function importSubscription(channel: {channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}) {
+  async function importSubscription(channel: {channel_id:string;title:string;thumbnail_url:string|null;channel_url:string;subscriber_count?:number|null}) {
     const added = await addFoundChannel(channel);
     if (added) setYoutubeSubscriptions(items => items.filter(item => item.channel_id !== channel.channel_id));
   }
@@ -168,7 +168,7 @@ export default function Home() {
     } finally { setLoading(false); }
   }
 
-  async function addFoundChannel(channel: {channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}) {
+  async function addFoundChannel(channel: {channel_id:string;title:string;thumbnail_url:string|null;channel_url:string;subscriber_count?:number|null}) {
     setLoading(true);
     const { error } = await supabase.from('user_artists').insert({
       user_id: session.user.id, artist_name: channel.title, channel_id: channel.channel_id,
@@ -240,7 +240,9 @@ export default function Home() {
       const savedDismissed = (dismissedRows ?? []).map((row: { channel_id: string }) => row.channel_id);
       setDismissedIds(savedDismissed);
       const existing = new Set(artists.map(a => a.channel_id));
-      setRecommendations((body.items ?? []).filter((item: {channel_id:string}) => !existing.has(item.channel_id) && !savedDismissed.includes(item.channel_id)));
+      setRecommendations((body.items ?? [])
+        .filter((item: {channel_id:string}) => !existing.has(item.channel_id) && !savedDismissed.includes(item.channel_id))
+        .sort((a: {subscriber_count?:number|null}, b: {subscriber_count?:number|null}) => (b.subscriber_count ?? 0) - (a.subscriber_count ?? 0)));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'שגיאה בטעינת הצעות.');
     } finally { setLoading(false); }
@@ -258,7 +260,7 @@ export default function Home() {
     setRecommendations(items => items.filter(item => item.channel_id !== channelId));
   }
 
-  async function addRecommendedChannel(channel: {channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}) {
+  async function addRecommendedChannel(channel: {channel_id:string;title:string;thumbnail_url:string|null;channel_url:string;subscriber_count?:number|null}) {
     const added = await addFoundChannel(channel);
     if (added) setRecommendations(items => items.filter(item => item.channel_id !== channel.channel_id));
   }
@@ -368,7 +370,7 @@ export default function Home() {
       {tab === 'artists' && <>
         <div className="section-intro"><h2>האמנים שמהם נביא עדכונים</h2><p>הוסף ערוץ YouTube לפי Channel ID כדי לקבל את השירים החדשים שלו.</p></div>
         <form className="add-form" onSubmit={searchYouTubeChannels}><label>חיפוש ערוץ YouTube<input value={channelQuery} onChange={e => setChannelQuery(e.target.value)} required placeholder="חפש שם אמן או ערוץ…" /></label><button className="primary" disabled={loading}>חפש ערוצים</button></form>
-        {channelResults.length > 0 && <div className="artist-list">{channelResults.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">בדוק ערוץ ↗</a><button className="primary" disabled={loading || artists.some(a => a.channel_id === channel.channel_id)} onClick={() => addFoundChannel(channel)}>{artists.some(a => a.channel_id === channel.channel_id) ? 'כבר נוסף' : 'הוסף לרשימה'}</button></div>)}</div>}
+        {channelResults.length > 0 && <div className="artist-list">{channelResults.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}{channel.subscriber_count ? ' · ' + channel.subscriber_count.toLocaleString('he-IL') + ' מנויים' : ''}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">בדוק ערוץ ↗</a><button className="primary" disabled={loading || artists.some(a => a.channel_id === channel.channel_id)} onClick={() => addFoundChannel(channel)}>{artists.some(a => a.channel_id === channel.channel_id) ? 'כבר נוסף' : 'הוסף לרשימה'}</button></div>)}</div>}
         <form className="add-form" onSubmit={addArtist}><label>שם האמן<input value={artistName} onChange={e => setArtistName(e.target.value)} required placeholder="לדוגמה: אמן אהוב" /></label><label>מזהה ערוץ YouTube<input value={channelId} onChange={e => setChannelId(e.target.value)} required placeholder="UCxxxxxxxxxxxxxxxx" /></label><button className="primary" disabled={loading}>＋ הוסף לרשימה</button></form>
         <div className="artist-list">{artists.map(a => <div className="artist-row" key={a.id}><div className="artist-avatar">{a.thumbnail_url ? <img src={a.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{a.artist_name}</strong><small>{a.channel_id}</small></div><a href={a.channel_url ?? `https://www.youtube.com/channel/${a.channel_id}`} target="_blank" rel="noreferrer">פתיחת הערוץ ↗</a><button className="remove" onClick={() => removeArtist(a.id)}>הסר</button></div>)}{!artists.length && <div className="empty-state"><strong>הרשימה עדיין ריקה</strong><p>הוסף את ערוצי האמנים שאתה אוהב.</p></div>}</div>
       </>}
@@ -380,11 +382,11 @@ export default function Home() {
         <div className="toolbar"><button className="secondary" onClick={loadRecommendations} disabled={loading}>{loading ? 'מחפש…' : '↻ רענן הצעות'}</button></div>
         {!artists.length && !selectedGenres.length && <div className="empty-state"><strong>כדאי לבחור סגנון מוזיקלי או להוסיף אמן</strong><p>אפשר לשמור העדפות במסך החיבורים וההגדרות.</p><button className="secondary" onClick={() => setTab('connect')}>בחירת העדפות</button></div>}
         {artists.length > 0 && !recommendations.length && <div className="empty-state"><strong>אין כרגע הצעות חדשות</strong><p>אפשר לרענן את החיפוש בהמשך.</p></div>}
-        <div className="artist-list">{recommendations.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">בדוק ערוץ ↗</a><button className="primary" disabled={loading} onClick={() => addRecommendedChannel(channel)}>הוסף</button><button className="remove" onClick={() => dismissRecommendation(channel.channel_id, channel.title)}>לא מעוניין</button></div>)}</div>
+        <div className="artist-list">{recommendations.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}{channel.subscriber_count ? ' · ' + channel.subscriber_count.toLocaleString('he-IL') + ' מנויים' : ''}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">בדוק ערוץ ↗</a><button className="primary" disabled={loading} onClick={() => addRecommendedChannel(channel)}>הוסף</button><button className="remove" onClick={() => dismissRecommendation(channel.channel_id, channel.title)}>לא מעוניין</button></div>)}</div>
       </>}
 
       {tab === 'connect' && <div className="settings-grid"><article className="settings-card"><span className="settings-icon">♫</span><h2>העדפות מוזיקה</h2><p>בחר סגנונות ושפות כדי להתאים את חיפוש ההמלצות.</p><div className="preference-group"><strong>סגנונות</strong>{['פופ','מזרחית','ים תיכוני','חסידי','רוק','היפ הופ','אלקטרוני','אקוסטי'].map(genre => <label key={genre}><input type="checkbox" checked={selectedGenres.includes(genre)} onChange={e => setSelectedGenres(old => e.target.checked ? [...old, genre] : old.filter(item => item !== genre))} />{genre}</label>)}</div><div className="preference-group"><strong>שפות</strong>{[{value:'he',label:'עברית'},{value:'en',label:'אנגלית'}].map(language => <label key={language.value}><input type="checkbox" checked={selectedLanguages.includes(language.value)} onChange={e => setSelectedLanguages(old => e.target.checked ? [...old, language.value] : old.filter(item => item !== language.value))} />{language.label}</label>)}</div><button className="primary" onClick={savePreferences} disabled={loading}>שמור העדפות</button></article><article className="settings-card"><span className="settings-icon">▶</span><h2>YouTube Data API</h2><p>חיבור רשמי להצגת שירים חדשים לפי ערוצי האמנים.</p><span className="pill warning">ממתין למפתח API</span><ol><li>צור פרויקט ב-Google Cloud.</li><li>הפעל YouTube Data API v3.</li><li>צור API Key והוסף אותו ב-Supabase → Edge Functions → Secrets בשם <code>YOUTUBE_API_KEY</code>.</li></ol></article><article className="settings-card"><span className="settings-icon">G</span><h2>חיבור חשבון YouTube</h2><p>קישור חשבון Google לחשבון האתר, עם הרשאה לקריאת רשימת המינויים שלך ב-YouTube.</p><span className="pill warning">דורש הגדרת Google OAuth</span><button className="primary" onClick={connectYouTubeAccount} disabled={loading}>חבר חשבון Google</button><button className="secondary" onClick={importYouTubeSubscriptions} disabled={subscriptionsLoading}>{subscriptionsLoading ? 'טוען מינויים…' : 'ייבא מינויים מ-YouTube'}</button><p className="fine">יש להגדיר Google Provider ב-Supabase ולהפעיל Manual Identity Linking. ההרשאה המבוקשת היא youtube.readonly. אסימון Google נשלח לפונקציית שרת מאומתת ואינו נשמר במסד הנתונים.</p></article></div>}
-      {tab === 'connect' && youtubeSubscriptions.length > 0 && <section className="subscriptions-panel"><div className="section-intro"><h2>המינויים שלך ב-YouTube</h2><p>בחר ערוצים להוספה לרשימת האמנים באתר.</p></div><div className="artist-list">{youtubeSubscriptions.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">פתיחת הערוץ ↗</a><button className="primary" onClick={() => importSubscription(channel)} disabled={loading || artists.some(a => a.channel_id === channel.channel_id)}>{artists.some(a => a.channel_id === channel.channel_id) ? 'כבר נוסף' : 'הוסף לאמנים'}</button></div>)}</div></section>}
+      {tab === 'connect' && youtubeSubscriptions.length > 0 && <section className="subscriptions-panel"><div className="section-intro"><h2>המינויים שלך ב-YouTube</h2><p>בחר ערוצים להוספה לרשימת האמנים באתר.</p></div><div className="artist-list">{youtubeSubscriptions.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}{channel.subscriber_count ? ' · ' + channel.subscriber_count.toLocaleString('he-IL') + ' מנויים' : ''}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">פתיחת הערוץ ↗</a><button className="primary" onClick={() => importSubscription(channel)} disabled={loading || artists.some(a => a.channel_id === channel.channel_id)}>{artists.some(a => a.channel_id === channel.channel_id) ? 'כבר נוסף' : 'הוסף לאמנים'}</button></div>)}</div></section>}
       <footer>המוזיקה שלי · התוצאות מגיעות מ-YouTube הרשמי · הממשק בעברית</footer>
     </section>
   </main>;

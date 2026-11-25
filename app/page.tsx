@@ -198,7 +198,12 @@ export default function Home() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.message || 'לא ניתן לטעון הצעות כרגע.');
-      const savedDismissed = JSON.parse(localStorage.getItem('my-music-dismissed-channels') || '[]') as string[];
+      const { data: dismissedRows, error: dismissedError } = await supabase
+        .from('dismissed_artists')
+        .select('channel_id')
+        .eq('user_id', current.user.id);
+      if (dismissedError) throw dismissedError;
+      const savedDismissed = (dismissedRows ?? []).map((row: { channel_id: string }) => row.channel_id);
       setDismissedIds(savedDismissed);
       const existing = new Set(artists.map(a => a.channel_id));
       setRecommendations((body.items ?? []).filter((item: {channel_id:string}) => !existing.has(item.channel_id) && !savedDismissed.includes(item.channel_id)));
@@ -207,10 +212,15 @@ export default function Home() {
     } finally { setLoading(false); }
   }
 
-  function dismissRecommendation(channelId: string) {
-    const next = [...new Set([...dismissedIds, channelId])];
-    setDismissedIds(next);
-    localStorage.setItem('my-music-dismissed-channels', JSON.stringify(next));
+  async function dismissRecommendation(channelId: string, artistName: string) {
+    if (dismissedIds.includes(channelId)) return;
+    const { error } = await supabase.from('dismissed_artists').insert({
+      user_id: session.user.id,
+      channel_id: channelId,
+      artist_name: artistName,
+    });
+    if (error) { setNotice(error.message); return; }
+    setDismissedIds(ids => [...ids, channelId]);
     setRecommendations(items => items.filter(item => item.channel_id !== channelId));
   }
 
@@ -336,7 +346,7 @@ export default function Home() {
         <div className="toolbar"><button className="secondary" onClick={loadRecommendations} disabled={loading}>{loading ? 'מחפש…' : '↻ רענן הצעות'}</button></div>
         {!artists.length && <div className="empty-state"><strong>צריך להתחיל מאמן אחד</strong><p>הוסף אמן כדי שנוכל לחפש ערוצים דומים.</p><button className="secondary" onClick={() => setTab('artists')}>הוספת אמן</button></div>}
         {artists.length > 0 && !recommendations.length && <div className="empty-state"><strong>אין כרגע הצעות חדשות</strong><p>אפשר לרענן את החיפוש בהמשך.</p></div>}
-        <div className="artist-list">{recommendations.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">בדוק ערוץ ↗</a><button className="primary" disabled={loading} onClick={() => addRecommendedChannel(channel)}>הוסף</button><button className="remove" onClick={() => dismissRecommendation(channel.channel_id)}>לא מעוניין</button></div>)}</div>
+        <div className="artist-list">{recommendations.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">בדוק ערוץ ↗</a><button className="primary" disabled={loading} onClick={() => addRecommendedChannel(channel)}>הוסף</button><button className="remove" onClick={() => dismissRecommendation(channel.channel_id, channel.title)}>לא מעוניין</button></div>)}</div>
       </>}
 
       {tab === 'connect' && <div className="settings-grid"><article className="settings-card"><span className="settings-icon">▶</span><h2>YouTube Data API</h2><p>חיבור רשמי להצגת שירים חדשים לפי ערוצי האמנים.</p><span className="pill warning">ממתין למפתח API</span><ol><li>צור פרויקט ב-Google Cloud.</li><li>הפעל YouTube Data API v3.</li><li>צור API Key והוסף אותו ב-Supabase → Edge Functions → Secrets בשם <code>YOUTUBE_API_KEY</code>.</li></ol></article><article className="settings-card"><span className="settings-icon">G</span><h2>חיבור חשבון YouTube</h2><p>קישור חשבון Google לחשבון האתר, עם הרשאה לקריאת רשימת המינויים שלך ב-YouTube.</p><span className="pill warning">דורש הגדרת Google OAuth</span><button className="primary" onClick={connectYouTubeAccount} disabled={loading}>חבר חשבון Google</button><button className="secondary" onClick={importYouTubeSubscriptions} disabled={subscriptionsLoading}>{subscriptionsLoading ? 'טוען מינויים…' : 'ייבא מינויים מ-YouTube'}</button><p className="fine">יש להגדיר Google Provider ב-Supabase ולהפעיל Manual Identity Linking. ההרשאה המבוקשת היא youtube.readonly. אסימון Google נשלח לפונקציית שרת מאומתת ואינו נשמר במסד הנתונים.</p></article></div>}

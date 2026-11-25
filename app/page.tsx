@@ -24,6 +24,8 @@ export default function Home() {
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [youtubeSubscriptions, setYoutubeSubscriptions] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}>>([]);
   const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['he']);
   const [search, setSearch] = useState('');
   const [filterArtist, setFilterArtist] = useState('all');
   const [loading, setLoading] = useState(false);
@@ -40,6 +42,7 @@ export default function Home() {
     if (session?.user) {
       void loadArtists();
       void loadFavorites();
+      void loadPreferences();
     } else {
       setArtists([]); setSongs([]); setFavorites([]); setFavoriteRows([]);
       setRecommendations([]);
@@ -183,16 +186,45 @@ export default function Home() {
     return true;
   }
 
+  async function loadPreferences() {
+    const { data, error } = await supabase.from('music_preferences')
+      .select('genres,language_preferences')
+      .eq('user_id', session.user.id)
+      .maybeSingle();
+    if (error) { setNotice(error.message); return; }
+    if (data) {
+      setSelectedGenres(data.genres ?? []);
+      setSelectedLanguages(data.language_preferences ?? ['he']);
+    }
+  }
+
+  async function savePreferences() {
+    setLoading(true);
+    const { error } = await supabase.from('music_preferences').upsert({
+      user_id: session.user.id,
+      genres: selectedGenres,
+      language_preferences: selectedLanguages,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+    setLoading(false);
+    if (error) setNotice(error.message);
+    else setNotice('העדפות המוזיקה נשמרו.');
+  }
+
   async function loadRecommendations() {
-    if (!artists.length) { setRecommendations([]); return; }
+    if (!artists.length && !selectedGenres.length) { setRecommendations([]); return; }
     const endpoint = process.env.NEXT_PUBLIC_YOUTUBE_SEARCH_URL;
     if (!endpoint) { setNotice('חסר חיבור לשירות חיפוש YouTube.'); return; }
     setLoading(true);
     try {
       const { data: { session: current } } = await supabase.auth.getSession();
       if (!current) return;
-      const seed = artists.slice(0, 3).map(a => a.artist_name).join(' ');
-      const query = (seed + ' זמר ישראלי').slice(0, 100);
+      const seed = [
+        ...artists.slice(0, 3).map(a => a.artist_name),
+        ...selectedGenres,
+        ...selectedLanguages.map(language => language === 'he' ? 'עברית' : 'English'),
+      ].join(' ');
+      const query = ((seed || 'זמרים ישראלים') + ' זמרים').slice(0, 100);
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${current.access_token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY! },
@@ -346,12 +378,12 @@ export default function Home() {
       {tab === 'recommendations' && <>
         <div className="section-intro"><h2>ערוצים שאולי יתאימו לטעם שלך</h2><p>ההצעות מבוססות על חיפוש YouTube לפי שמות האמנים שכבר הוספת. זו התאמת חיפוש ראשונית, לא דירוג פופולריות או אימות רשמי.</p></div>
         <div className="toolbar"><button className="secondary" onClick={loadRecommendations} disabled={loading}>{loading ? 'מחפש…' : '↻ רענן הצעות'}</button></div>
-        {!artists.length && <div className="empty-state"><strong>צריך להתחיל מאמן אחד</strong><p>הוסף אמן כדי שנוכל לחפש ערוצים דומים.</p><button className="secondary" onClick={() => setTab('artists')}>הוספת אמן</button></div>}
+        {!artists.length && !selectedGenres.length && <div className="empty-state"><strong>כדאי לבחור סגנון מוזיקלי או להוסיף אמן</strong><p>אפשר לשמור העדפות במסך החיבורים וההגדרות.</p><button className="secondary" onClick={() => setTab('connect')}>בחירת העדפות</button></div>}
         {artists.length > 0 && !recommendations.length && <div className="empty-state"><strong>אין כרגע הצעות חדשות</strong><p>אפשר לרענן את החיפוש בהמשך.</p></div>}
         <div className="artist-list">{recommendations.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">בדוק ערוץ ↗</a><button className="primary" disabled={loading} onClick={() => addRecommendedChannel(channel)}>הוסף</button><button className="remove" onClick={() => dismissRecommendation(channel.channel_id, channel.title)}>לא מעוניין</button></div>)}</div>
       </>}
 
-      {tab === 'connect' && <div className="settings-grid"><article className="settings-card"><span className="settings-icon">▶</span><h2>YouTube Data API</h2><p>חיבור רשמי להצגת שירים חדשים לפי ערוצי האמנים.</p><span className="pill warning">ממתין למפתח API</span><ol><li>צור פרויקט ב-Google Cloud.</li><li>הפעל YouTube Data API v3.</li><li>צור API Key והוסף אותו ב-Supabase → Edge Functions → Secrets בשם <code>YOUTUBE_API_KEY</code>.</li></ol></article><article className="settings-card"><span className="settings-icon">G</span><h2>חיבור חשבון YouTube</h2><p>קישור חשבון Google לחשבון האתר, עם הרשאה לקריאת רשימת המינויים שלך ב-YouTube.</p><span className="pill warning">דורש הגדרת Google OAuth</span><button className="primary" onClick={connectYouTubeAccount} disabled={loading}>חבר חשבון Google</button><button className="secondary" onClick={importYouTubeSubscriptions} disabled={subscriptionsLoading}>{subscriptionsLoading ? 'טוען מינויים…' : 'ייבא מינויים מ-YouTube'}</button><p className="fine">יש להגדיר Google Provider ב-Supabase ולהפעיל Manual Identity Linking. ההרשאה המבוקשת היא youtube.readonly. אסימון Google נשלח לפונקציית שרת מאומתת ואינו נשמר במסד הנתונים.</p></article></div>}
+      {tab === 'connect' && <div className="settings-grid"><article className="settings-card"><span className="settings-icon">♫</span><h2>העדפות מוזיקה</h2><p>בחר סגנונות ושפות כדי להתאים את חיפוש ההמלצות.</p><div className="preference-group"><strong>סגנונות</strong>{['פופ','מזרחית','ים תיכוני','חסידי','רוק','היפ הופ','אלקטרוני','אקוסטי'].map(genre => <label key={genre}><input type="checkbox" checked={selectedGenres.includes(genre)} onChange={e => setSelectedGenres(old => e.target.checked ? [...old, genre] : old.filter(item => item !== genre))} />{genre}</label>)}</div><div className="preference-group"><strong>שפות</strong>{[{value:'he',label:'עברית'},{value:'en',label:'אנגלית'}].map(language => <label key={language.value}><input type="checkbox" checked={selectedLanguages.includes(language.value)} onChange={e => setSelectedLanguages(old => e.target.checked ? [...old, language.value] : old.filter(item => item !== language.value))} />{language.label}</label>)}</div><button className="primary" onClick={savePreferences} disabled={loading}>שמור העדפות</button></article><article className="settings-card"><span className="settings-icon">▶</span><h2>YouTube Data API</h2><p>חיבור רשמי להצגת שירים חדשים לפי ערוצי האמנים.</p><span className="pill warning">ממתין למפתח API</span><ol><li>צור פרויקט ב-Google Cloud.</li><li>הפעל YouTube Data API v3.</li><li>צור API Key והוסף אותו ב-Supabase → Edge Functions → Secrets בשם <code>YOUTUBE_API_KEY</code>.</li></ol></article><article className="settings-card"><span className="settings-icon">G</span><h2>חיבור חשבון YouTube</h2><p>קישור חשבון Google לחשבון האתר, עם הרשאה לקריאת רשימת המינויים שלך ב-YouTube.</p><span className="pill warning">דורש הגדרת Google OAuth</span><button className="primary" onClick={connectYouTubeAccount} disabled={loading}>חבר חשבון Google</button><button className="secondary" onClick={importYouTubeSubscriptions} disabled={subscriptionsLoading}>{subscriptionsLoading ? 'טוען מינויים…' : 'ייבא מינויים מ-YouTube'}</button><p className="fine">יש להגדיר Google Provider ב-Supabase ולהפעיל Manual Identity Linking. ההרשאה המבוקשת היא youtube.readonly. אסימון Google נשלח לפונקציית שרת מאומתת ואינו נשמר במסד הנתונים.</p></article></div>}
       {tab === 'connect' && youtubeSubscriptions.length > 0 && <section className="subscriptions-panel"><div className="section-intro"><h2>המינויים שלך ב-YouTube</h2><p>בחר ערוצים להוספה לרשימת האמנים באתר.</p></div><div className="artist-list">{youtubeSubscriptions.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">פתיחת הערוץ ↗</a><button className="primary" onClick={() => importSubscription(channel)} disabled={loading || artists.some(a => a.channel_id === channel.channel_id)}>{artists.some(a => a.channel_id === channel.channel_id) ? 'כבר נוסף' : 'הוסף לאמנים'}</button></div>)}</div></section>}
       <footer>המוזיקה שלי · התוצאות מגיעות מ-YouTube הרשמי · הממשק בעברית</footer>
     </section>

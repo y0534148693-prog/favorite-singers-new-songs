@@ -22,6 +22,8 @@ export default function Home() {
   const [channelResults, setChannelResults] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}>>([]);
   const [recommendations, setRecommendations] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}>>([]);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
+  const [youtubeSubscriptions, setYoutubeSubscriptions] = useState<Array<{channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}>>([]);
+  const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [filterArtist, setFilterArtist] = useState('all');
   const [loading, setLoading] = useState(false);
@@ -58,6 +60,52 @@ export default function Home() {
     });
     setLoading(false);
     if (result.error) setNotice(result.error.message);
+  }
+
+  async function connectYouTubeAccount() {
+    setLoading(true); setNotice('');
+    const { error } = await supabase.auth.linkIdentity({
+      provider: 'google',
+      options: {
+        scopes: 'https://www.googleapis.com/auth/youtube.readonly',
+        redirectTo: window.location.origin,
+        queryParams: { access_type: 'offline', prompt: 'consent' },
+      },
+    });
+    setLoading(false);
+    if (error) setNotice(error.message);
+  }
+
+  async function importYouTubeSubscriptions() {
+    setSubscriptionsLoading(true); setNotice('');
+    try {
+      const { data: { session: current } } = await supabase.auth.getSession();
+      const googleToken = (current as (typeof current & { provider_token?: string }) | null)?.provider_token;
+      const endpoint = process.env.NEXT_PUBLIC_YOUTUBE_SUBSCRIPTIONS_URL;
+      if (!current || !googleToken || !endpoint) {
+        throw new Error('לא נמצא אסימון Google פעיל. חבר תחילה את חשבון YouTube עם הרשאת קריאת מינויים.');
+      }
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${current.access_token}`,
+          apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+        },
+        body: JSON.stringify({ google_access_token: googleToken }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || 'ייבוא המינויים נכשל.');
+      setYoutubeSubscriptions(body.items ?? []);
+      if (!(body.items ?? []).length) setNotice('לא נמצאו מינויים בערוץ YouTube הזה.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'שגיאה בייבוא המינויים.');
+    } finally { setSubscriptionsLoading(false); }
+  }
+
+  async function importSubscription(channel: {channel_id:string;title:string;thumbnail_url:string|null;channel_url:string}) {
+    await addFoundChannel(channel);
+    setYoutubeSubscriptions(items => items.filter(item => item.channel_id !== channel.channel_id));
   }
 
   async function signIn(e: React.FormEvent) {
@@ -291,7 +339,8 @@ export default function Home() {
         <div className="artist-list">{recommendations.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">בדוק ערוץ ↗</a><button className="primary" disabled={loading} onClick={() => addRecommendedChannel(channel)}>הוסף</button><button className="remove" onClick={() => dismissRecommendation(channel.channel_id)}>לא מעוניין</button></div>)}</div>
       </>}
 
-      {tab === 'connect' && <div className="settings-grid"><article className="settings-card"><span className="settings-icon">▶</span><h2>YouTube Data API</h2><p>חיבור רשמי להצגת שירים חדשים לפי ערוצי האמנים.</p><span className="pill warning">ממתין למפתח API</span><ol><li>צור פרויקט ב-Google Cloud.</li><li>הפעל YouTube Data API v3.</li><li>צור API Key והוסף אותו ב-Supabase → Edge Functions → Secrets בשם <code>YOUTUBE_API_KEY</code>.</li></ol></article><article className="settings-card"><span className="settings-icon">G</span><h2>Google OAuth</h2><p>חיבור Google לצורך כניסה לחשבון. קריאת מינויים והרשמה לערוצים עדיין אינן ממומשות באתר.</p><span className="pill warning">טרם הוגדר</span><p className="fine">יש להגדיר OAuth Client ב-Google Cloud ולהפעיל את Google Provider ב-Supabase Authentication. פרטי הלקוח מוגדרים שם — לא בקוד האתר. הרשאת YouTube אינה פעילה עד להשלמת הבדיקה מקצה לקצה.</p></article></div>}
+      {tab === 'connect' && <div className="settings-grid"><article className="settings-card"><span className="settings-icon">▶</span><h2>YouTube Data API</h2><p>חיבור רשמי להצגת שירים חדשים לפי ערוצי האמנים.</p><span className="pill warning">ממתין למפתח API</span><ol><li>צור פרויקט ב-Google Cloud.</li><li>הפעל YouTube Data API v3.</li><li>צור API Key והוסף אותו ב-Supabase → Edge Functions → Secrets בשם <code>YOUTUBE_API_KEY</code>.</li></ol></article><article className="settings-card"><span className="settings-icon">G</span><h2>חיבור חשבון YouTube</h2><p>קישור חשבון Google לחשבון האתר, עם הרשאה לקריאת רשימת המינויים שלך ב-YouTube.</p><span className="pill warning">דורש הגדרת Google OAuth</span><button className="primary" onClick={connectYouTubeAccount} disabled={loading}>חבר חשבון Google</button><button className="secondary" onClick={importYouTubeSubscriptions} disabled={subscriptionsLoading}>{subscriptionsLoading ? 'טוען מינויים…' : 'ייבא מינויים מ-YouTube'}</button><p className="fine">יש להגדיר Google Provider ב-Supabase ולהפעיל Manual Identity Linking. ההרשאה המבוקשת היא youtube.readonly. אסימון Google נשלח לפונקציית שרת מאומתת ואינו נשמר במסד הנתונים.</p></article></div>}
+      {tab === 'connect' && youtubeSubscriptions.length > 0 && <section className="subscriptions-panel"><div className="section-intro"><h2>המינויים שלך ב-YouTube</h2><p>בחר ערוצים להוספה לרשימת האמנים באתר.</p></div><div className="artist-list">{youtubeSubscriptions.map(channel => <div className="artist-row" key={channel.channel_id}><div className="artist-avatar">{channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : '♫'}</div><div className="artist-copy"><strong>{channel.title}</strong><small>{channel.channel_id}</small></div><a href={channel.channel_url} target="_blank" rel="noreferrer">פתיחת הערוץ ↗</a><button className="primary" onClick={() => importSubscription(channel)} disabled={loading || artists.some(a => a.channel_id === channel.channel_id)}>{artists.some(a => a.channel_id === channel.channel_id) ? 'כבר נוסף' : 'הוסף לאמנים'}</button></div>)}</div></section>}
       <footer>המוזיקה שלי · התוצאות מגיעות מ-YouTube הרשמי · הממשק בעברית</footer>
     </section>
   </main>;
